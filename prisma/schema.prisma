@@ -1,0 +1,269 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+enum UserRole {
+  PlatformSuperAdmin
+  RootAdmin
+  Admin
+  MedicalStaff
+  CareStaff
+  ReceptionStaff
+  Family
+  Resident
+}
+
+enum CognitiveStatus {
+  NORMAL
+  IMPAIRED
+  SEVERE
+}
+
+enum MobilityStatus {
+  INDEPENDENT
+  ASSISTED
+  DEPENDENT
+}
+
+enum MedicationStatus {
+  scheduled
+  administered
+  skipped
+}
+
+enum CareLogType {
+  meal
+  exercise
+  hygiene
+  medication
+  custom
+}
+
+enum CareTaskStatus {
+  pending
+  in_progress
+  completed
+}
+
+enum AlertType {
+  SOS
+  HealthAnomaly
+  OverduePayment
+  LowStock
+  FullRoom
+}
+
+enum NotificationType {
+  Alert
+  ServiceSuggestion
+  PaymentReminder
+  VisitReminder
+}
+
+enum RoomType {
+  single
+  double
+  multi
+}
+
+enum ServiceType {
+  base
+  add_on
+  special
+}
+
+enum ContractStatus {
+  active
+  expired
+  cancelled
+}
+
+enum ContractServiceStatus {
+  active
+  expired
+  cancelled
+}
+
+enum PaymentFrequency {
+  monthly
+  annually
+}
+
+enum PaymentMethod {
+  // cash
+  // bank_transfer
+  paypal
+}
+
+enum PaymentStatus {
+  paid
+  overdue
+  pending
+}
+
+enum SpecialCareStatus {
+  suggested
+  accepted
+  declined
+  active
+  completed
+}
+
+enum ActivityStatus {
+  planned
+  participated
+  did_not_participate
+}
+
+enum VisitStatus {
+  pending
+  approved
+  rejected
+  completed
+}
+
+enum FamilyLinkStatus {
+  pending
+  active
+  revoked
+}
+
+enum InvitationStatus {
+  sent
+  accepted
+  expired
+}
+
+enum TokenType {
+  AccessToken
+  RefreshToken
+  EmailVerifyToken
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+model Institution {
+  institution_id String   @id @default(uuid())
+  name           String
+  address        String
+  contact_info   Json
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  users     User[]
+  rooms     Room[]
+  residents Resident[]
+}
+
+model User {
+  user_id                  String   @id @default(uuid())
+  password                 String 
+  email                    String   @unique
+  role                     UserRole
+  status                   UserStatus @default(inactive)
+  institution_id           String?   
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  institution              Institution?       @relation(fields: [institution_id], references: [institution_id])
+  familyProfile            FamilyProfile?
+  userTokens               UserToken[]
+  residentApplication      ResidentApplication[]
+  assignedResidents        Resident[] @relation("AssignedStaff")
+  resident                 Resident? @relation("ResidentUser")
+}
+
+model FamilyProfile {
+  profile_id String   @id @default(uuid())
+  user_id    String   @unique
+  full_name  String
+  phone      String
+  address    String
+  relation   String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [user_id])
+}
+
+model UserToken {
+  token_id      String   @id @default(uuid())
+  user_id       String
+  token_string String   @unique
+  token_type   TokenType
+  exp          Int
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [user_id])
+}
+
+model ResidentApplication {
+  application_id    String   @id @default(uuid())
+  family_user_id    String
+  resident_name     String
+  date_of_birth     DateTime
+  preliminary_health Json
+  preferences       Json
+  created_at        DateTime @default(now())
+
+  family_user User @relation(fields: [family_user_id], references: [user_id])
+}
+
+model Resident {
+  resident_id       String   @id @default(uuid())
+  user_id           String?  @unique   
+  institution_id    String
+  room_id           String?
+  name              String
+  date_of_birth     DateTime
+  cognitive_status  CognitiveStatus
+  mobility_status   MobilityStatus
+  chronic_diseases  Json
+  allergies         Json
+  notes             String?
+  assigned_staff_id String?
+  admission_date    DateTime
+  created_at        DateTime @default(now())
+
+  user           User?        @relation("ResidentUser", fields: [user_id], references: [user_id])
+
+  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+  room           Room?        @relation(fields: [room_id], references: [room_id])
+
+  assigned_staff User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
+}
+
+model Room {
+  room_id           String   @id @default(uuid())
+  institution_id    String
+  room_number       String
+  type              RoomType
+  capacity          Int
+  is_available      Boolean
+  current_occupancy Int
+  notes             String?
+
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+  residents   Resident[]
+}
