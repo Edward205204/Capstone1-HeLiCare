@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { wrapRequestHandler } from '~/utils/handler'
 import {
   accessTokenValidator,
+  createAdminForInstitutionValidator,
   emailVerifyTokenValidator,
   forgotPasswordValidator,
   loginValidator,
@@ -93,4 +94,10 @@ authRouter.post(
  * @response {message: string}
  */
 authRouter.post('/reset-password', resetPasswordValidator, wrapRequestHandler(authController.resetPassword))
+
+authRouter.post(
+  '/create-admin-for-institution',
+  createAdminForInstitutionValidator
+  // wrapRequestHandler(authController.createAdminForInstitution)
+)
 export default authRouter

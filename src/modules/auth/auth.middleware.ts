@@ -365,3 +365,14 @@ export const emailVerifyTokenValidator = validate(
     ['body']
   )
 )
+
+export const createAdminForInstitutionValidator = validate(
+  checkSchema(
+    {
+      email: emailSchema,
+      password: passwordSchema,
+      confirm_password: confirmPasswordSchema
+    },
+    ['body']
+  )
+)
