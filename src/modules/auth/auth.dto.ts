@@ -19,15 +19,26 @@ export interface RefreshTokenPayload extends TokenPayload {
 }
 
 export interface RefreshTokenReqBody {
-  refresh_token: string
+  refresh_token: TokenType
 }
 
-export interface EmailVerifyTokenPayload extends TokenPayload {
+export interface EmailVerifyTokenPayload {
+  email: string
   token_type: TokenType.EmailVerifyToken
+}
+
+export interface EmailVerifyTokenReqBody extends TokenPayload {
+  token_type: TokenType.EmailVerifyToken
+}
+
+export interface ForgotPasswordTokenPayload {
+  email: string
+  token_type: TokenType.ForgotPasswordToken
 }
 
 export interface RegisterDto {
   email: string
   password: string
   confirm_password: string
+  role: UserRole
 }

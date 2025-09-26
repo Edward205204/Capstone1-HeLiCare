@@ -5,5 +5,6 @@ declare module 'express' {
     user?: User
     decoded_authorization?: AccessTokenPayload
     decoded_refresh_token?: RefreshTokenPayload
+    decoded_email_verify_token?: TokenPayload & { token_type: TokenType.EmailVerifyToken }
   }
 }

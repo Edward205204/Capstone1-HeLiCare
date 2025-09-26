@@ -10,7 +10,7 @@ export const accessTokenDecode = async (token: string, req?: Request) => {
 
   if (req) {
     req.decoded_authorization = decoded_authorization as AccessTokenPayload
-    return true
+    return decoded_authorization
   }
   return decoded_authorization
 }

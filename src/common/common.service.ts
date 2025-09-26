@@ -18,6 +18,12 @@ class CommonService {
       where: { user_id, token_type }
     })
   }
+
+  getUserTokenByTokenString = ({ token_string }: { token_string: string }): Promise<UserToken | null> => {
+    return prisma.userToken.findUnique({
+      where: { token_string }
+    })
+  }
 }
 
 const commonService = new CommonService()

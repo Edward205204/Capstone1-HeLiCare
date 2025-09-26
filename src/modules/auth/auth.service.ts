@@ -1,12 +1,6 @@
-import { UserRole, UserStatus } from '@prisma/client'
+import { $Enums, User, UserRole, UserStatus } from '@prisma/client'
 import { TokenType } from '~/constants/token_type'
-import {
-  AccessTokenPayload,
-  EmailVerifyTokenPayload,
-  RefreshTokenPayload,
-  RegisterDto,
-  TokenPayload
-} from '~/modules/auth/auth.dto'
+import { AccessTokenPayload, RefreshTokenPayload, RegisterDto, TokenPayload } from '~/modules/auth/auth.dto'
 import { prisma } from '~/utils/db'
 import { hashPassword } from '~/utils/hash'
 import { signToken, verifyToken } from '~/utils/jwt'
@@ -40,20 +34,6 @@ class AuthService {
       secretOrPrivateKey: process.env.JWT_SECRET_KEY_REFRESH_TOKEN as string,
       payload: { ...payload },
       option: { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION_TIME }
-    })
-  }
-
-  private async emailVerifyToken(payload: EmailVerifyTokenPayload): Promise<string> {
-    if (payload.exp) {
-      return await signToken({
-        secretOrPrivateKey: process.env.JWT_SECRET_KEY_EMAIL_VERIFY_TOKEN as string,
-        payload: { ...payload }
-      })
-    }
-    return await signToken({
-      secretOrPrivateKey: process.env.JWT_SECRET_KEY_EMAIL_VERIFY_TOKEN as string,
-      payload: { ...payload },
-      option: { expiresIn: process.env.EMAIL_VERIFY_TOKEN_EXPIRATION_TIME }
     })
   }
 
@@ -99,64 +79,110 @@ class AuthService {
     }
   }
 
-  sendEmailVerifyToken = async (email: string): Promise<{ otp_token: string; exp: number }> => {
-    const exp = new Date(Date.now() + 5 * 60 * 1000).getTime()
-
-    const userToken = await prisma.userToken.findFirst({
-      where: {
-        user_id: email,
-        token_type: TokenType.EmailVerifyToken
-      }
+  private async commonToken(payload: TokenPayload & { token_type: $Enums.TokenType }): Promise<string> {
+    return await signToken({
+      secretOrPrivateKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string,
+      payload: { ...payload },
+      option: { expiresIn: process.env.COMMON_VERIFY_TOKEN_EXPIRATION_TIME }
     })
-
-    if (userToken) {
-      await prisma.userToken.delete({
-        where: {
-          token_id: userToken.token_id
-        }
-      })
-    }
-
-    const otp_token = await this.emailVerifyToken({
-      user_id: email,
-      institution_id: null,
-      status: UserStatus.inactive,
-      role: UserRole.Family,
-      token_type: TokenType.EmailVerifyToken,
-      exp
-    })
-
-    await prisma.userToken.create({
-      data: {
-        user_id: email,
-        token_string: otp_token,
-        token_type: TokenType.EmailVerifyToken,
-        exp
-      }
-    })
-    console.log('email verify token', otp_token, '--- exp', exp)
-
-    return {
-      otp_token,
-      exp
-    }
   }
 
-  register = async (data: RegisterDto) => {
-    const { password } = await hashPassword(data.password)
-    const [user, { otp_token, exp }] = await Promise.all([
-      prisma.user.create({
-        data: {
-          email: data.email,
-          password,
-          role: UserRole.Family
+  private async decodeCommonToken(token: string) {
+    return await verifyToken({
+      token: token,
+      secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+    })
+  }
+
+  generateAndSaveToken = async ({
+    user_id,
+    token_type,
+    role,
+    status,
+    institution_id
+  }: {
+    user_id: string
+    token_type: $Enums.TokenType
+    role: UserRole
+    status: UserStatus
+    institution_id: string | null
+  }): Promise<string> => {
+    // Xoá token cũ nếu tồn tại và Tạo token mới
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [_, token] = await Promise.all([
+      prisma.userToken.deleteMany({
+        where: {
+          user_id,
+          token_type: token_type
         }
       }),
-      this.sendEmailVerifyToken(data.email)
+      this.commonToken({
+        user_id,
+        token_type: token_type,
+        role,
+        status,
+        institution_id
+      })
     ])
 
+    const { exp } = await this.decodeCommonToken(token)
+    // Lưu token mới
+    await prisma.userToken.create({
+      data: {
+        user_id,
+        token_type,
+        token_string: token,
+        exp: exp as number
+      }
+    })
+
+    return token
+  }
+
+  sendTokenToUserEmail = async ({
+    user_id,
+    token_type,
+    role,
+    status,
+    institution_id
+  }: {
+    user_id: string
+    token_type: $Enums.TokenType
+    role: UserRole
+    status: UserStatus
+    institution_id: string | null
+  }) => {
+    const token = await this.generateAndSaveToken({
+      user_id,
+      token_type: token_type,
+      role,
+      status,
+      institution_id
+    })
+    // TODO: sau này thêm mailgun send token vào email người dùng.
+    console.log(token)
+  }
+
+  register = async (data: RegisterDto): Promise<{ access_token: string; refresh_token: string }> => {
+    const { password } = await hashPassword(data.password)
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        password,
+        role: data.role
+      }
+    })
+
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.EmailVerifyToken,
+      role: data.role,
+      status: UserStatus.inactive,
+      institution_id: null
+    })
+
     const { access_token, refresh_token } = await this.login({
-      role: UserRole.Family,
+      role: data.role,
       institution_id: null,
       user_id: user.user_id,
       status: UserStatus.inactive
@@ -168,8 +194,14 @@ class AuthService {
     }
   }
 
-  resendEmailVerify = async (email: string) => {
-    await this.sendEmailVerifyToken(email)
+  resendEmailVerify = async (user: User) => {
+    this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.EmailVerifyToken,
+      role: user.role,
+      status: UserStatus.inactive,
+      institution_id: user.institution_id
+    })
   }
 
   logout = async (token_string: string) => {
@@ -182,10 +214,68 @@ class AuthService {
     })
   }
 
+  forgotPassword = async (user: User) => {
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.ForgotPasswordToken,
+      role: user.role,
+      status: user.status,
+      institution_id: user.institution_id
+    })
+  }
+
   logoutAllDevices = async (user_id: string) => {
     await prisma.userToken.deleteMany({
       where: { user_id }
     })
+  }
+
+  resetPassword = async ({ user_id, password }: { user_id: string; password: string }) => {
+    const { password: hashedPassword } = await hashPassword(password)
+    await prisma.user.update({
+      where: { user_id },
+      data: { password: hashedPassword }
+    })
+  }
+
+  verifyEmailToken = async (user: User, token_string: string) => {
+    const [[access_token, refresh_token]] = await Promise.all([
+      this.sightAccessTokenAndRefreshToken({
+        user_id: user.user_id,
+        status: UserStatus.active,
+        role: user.role,
+        institution_id: user.institution_id
+      }),
+      prisma.user.update({
+        where: { user_id: user.user_id },
+        data: { status: UserStatus.active }
+      })
+    ])
+
+    const { exp } = await this.decodeRefreshToken(refresh_token)
+
+    if (!exp) {
+      throw new Error('Exp is not found')
+    }
+
+    await Promise.all([
+      prisma.userToken.delete({
+        where: { token_string }
+      }),
+      prisma.userToken.create({
+        data: {
+          user_id: user.user_id,
+          token_string: refresh_token,
+          token_type: TokenType.RefreshToken,
+          exp: exp
+        }
+      })
+    ])
+
+    return {
+      access_token,
+      refresh_token
+    }
   }
 }
 
