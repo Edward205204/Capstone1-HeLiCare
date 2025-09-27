@@ -2,14 +2,18 @@ import { Router } from 'express'
 import { wrapRequestHandler } from '~/utils/handler'
 import {
   accessTokenValidator,
-  createAdminForInstitutionValidator,
+  createRootAdminValidator,
+  createStaffForInstitutionValidator,
   emailVerifyTokenValidator,
   forgotPasswordValidator,
   loginValidator,
   refreshTokenValidator,
   registerValidator,
+  renewInviteTokenValidator,
   resetPasswordValidator,
-  verifyForgotPasswordValidator
+  verifyForgotPasswordValidator,
+  verifyRootAdminInviteTokenValidator,
+  verifyStaffInviteTokenValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
 
@@ -95,9 +99,76 @@ authRouter.post(
  */
 authRouter.post('/reset-password', resetPasswordValidator, wrapRequestHandler(authController.resetPassword))
 
+/**
+ * @description Create staff for institution
+ * @method POST
+ * @path /auth/create-staff-for-institution
+ * @body {
+ *   email: string,            // Staff email (must be unique)
+ *   full_name: string,        // Staff full name
+ *   phone: string,            // Staff phone number
+ *   hire_date: string,        // Date of hire
+ *   position: string,         // Staff position (enum)
+ *   notes: string,            // Optional notes
+ *   institution_id: string    // ID of the institution
+ * }
+ * @response { message: string }
+ */
+
 authRouter.post(
-  '/create-admin-for-institution',
-  createAdminForInstitutionValidator
-  // wrapRequestHandler(authController.createAdminForInstitution)
+  '/create-staff-for-institution',
+  accessTokenValidator,
+  createStaffForInstitutionValidator,
+  wrapRequestHandler(authController.createStaffForInstitution)
 )
+
+/**
+ * @description Staff vào link từ email nhập email, password và confirm password
+ * @method POST
+ * @path /auth/verify-staff-invite-and-reset-password
+ * @body {email: string, password: string, staff_invite_token: string}
+ * @response {message: string}
+ */
+authRouter.post(
+  '/verify-staff-invite-and-reset-password',
+  verifyStaffInviteTokenValidator,
+  wrapRequestHandler(authController.verifyStaffInviteAndResetPassword)
+)
+
+/**
+ * @description Create root admin
+ * @method POST
+ * @path /auth/create-root-admin
+ * @body {email: string, institution_id: string}
+ * @response {message: string}
+ */
+authRouter.post(
+  '/create-root-admin',
+  accessTokenValidator,
+  createRootAdminValidator,
+  wrapRequestHandler(authController.createRootAdmin)
+)
+
+/**
+ * @description Verify root admin invite and reset password
+ * @method POST
+ * @path /auth/verify-root-admin-invite-and-reset-password
+ * @body {email: string, password: string, root_admin_invite_token: string}
+ * @response {message: string}
+ */
+authRouter.post(
+  '/verify-root-admin-invite-and-reset-password',
+  verifyRootAdminInviteTokenValidator,
+  wrapRequestHandler(authController.verifyRootAdminInviteAndResetPassword)
+)
+
+/**
+ * @description Renew invite token
+ * @method POST
+ * @path /auth/renew-invite-token
+ * @body {email: string}
+ * @response {message: string}
+ */
+authRouter.post('/renew-invite-token', renewInviteTokenValidator, wrapRequestHandler(authController.renewToken))
+
 export default authRouter

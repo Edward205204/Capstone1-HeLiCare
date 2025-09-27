@@ -3,7 +3,7 @@ import { Request, Response } from 'express'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { AuthService, authService as authServiceInstance } from './auth.service'
 import { User, UserStatus } from '@prisma/client'
-import { EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
+import { CreateStaffForInstitutionDto, EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
 
 class AuthController {
   constructor(
@@ -108,6 +108,47 @@ class AuthController {
       data
     })
     return
+  }
+
+  createStaffForInstitution = async (req: Request, res: Response) => {
+    await this.authService.createStaffForInstitution(req.body as CreateStaffForInstitutionDto)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Create staff for institution successfully'
+    })
+  }
+
+  verifyStaffInviteAndResetPassword = async (req: Request, res: Response) => {
+    const token_string = req.body.staff_invite_token
+    const { email, password } = req.body
+    await this.authService.verifyInviteTokenAndResetPassword({ email, password, token_string })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Verify staff invite successfully'
+    })
+  }
+
+  createRootAdmin = async (req: Request, res: Response) => {
+    const { email, institution_id } = req.body
+    await this.authService.createRootAdmin({ email, institution_id })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Create root admin successfully'
+    })
+  }
+
+  verifyRootAdminInviteAndResetPassword = async (req: Request, res: Response) => {
+    const token_string = req.body.root_admin_invite_token
+    const { email, password } = req.body
+    await this.authService.verifyInviteTokenAndResetPassword({ email, password, token_string })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Verify root admin invite successfully'
+    })
+  }
+
+  renewToken = async (req: Request, res: Response) => {
+    const user = req.user as User
+    await this.authService.renewInviteToken(user)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Renew token successfully'
+    })
   }
 }
 
