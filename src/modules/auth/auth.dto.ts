@@ -26,8 +26,8 @@ export interface StaffInviteTokenReqBody extends TokenPayload {
   token_type: TokenType.StaffInviteToken
 }
 
-export interface RootAdminInviteTokenReqBody extends TokenPayload {
-  token_type: TokenType.RootAdminInviteToken
+export interface AdminInviteTokenReqBody extends TokenPayload {
+  token_type: TokenType.AdminInviteToken
 }
 
 export interface ForgotPasswordTokenPayload {

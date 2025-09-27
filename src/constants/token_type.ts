@@ -4,6 +4,5 @@ export enum TokenType {
   EmailVerifyToken = 'EmailVerifyToken',
   ForgotPasswordToken = 'ForgotPasswordToken',
   StaffInviteToken = 'StaffInviteToken',
-  RootAdminInviteToken = 'RootAdminInviteToken',
   AdminInviteToken = 'AdminInviteToken'
 }
