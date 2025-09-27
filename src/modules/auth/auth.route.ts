@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { wrapRequestHandler } from '~/utils/handler'
 import {
   accessTokenValidator,
+  createAdminValidator,
   createRootAdminValidator,
   createStaffForInstitutionValidator,
   emailVerifyTokenValidator,
@@ -13,7 +14,8 @@ import {
   resetPasswordValidator,
   verifyForgotPasswordValidator,
   verifyRootAdminInviteTokenValidator,
-  verifyStaffInviteTokenValidator
+  verifyStaffInviteTokenValidator,
+  verifyAdminInviteTokenValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
 
@@ -170,5 +172,33 @@ authRouter.post(
  * @response {message: string}
  */
 authRouter.post('/renew-invite-token', renewInviteTokenValidator, wrapRequestHandler(authController.renewToken))
+
+/**
+ * @description Create admin by root admin
+ * @method POST
+ * @path /auth/create-admin
+ * @body {email: string}
+ * @header {Authorization: Bearer <access_token>}
+ * @response {message: string}
+ */
+authRouter.post(
+  '/create-admin',
+  accessTokenValidator,
+  createAdminValidator,
+  wrapRequestHandler(authController.createAdmin)
+)
+
+/**
+ * @description Verify admin invite and reset password
+ * @method POST
+ * @path /auth/verify-admin-invite-and-reset-password
+ * @body {email: string, password: string, confirm_password: string, admin_invite_token: string}
+ * @response {message: string}
+ */
+authRouter.post(
+  '/verify-admin-invite-and-reset-password',
+  verifyAdminInviteTokenValidator,
+  wrapRequestHandler(authController.verifyAdminInviteAndResetPassword)
+)
 
 export default authRouter

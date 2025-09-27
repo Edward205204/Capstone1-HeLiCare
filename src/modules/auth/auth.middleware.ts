@@ -13,7 +13,7 @@ import {
   AccessTokenPayload,
   EmailVerifyTokenReqBody,
   RefreshTokenPayload,
-  RootAdminInviteTokenReqBody,
+  AdminInviteTokenReqBody,
   StaffInviteTokenReqBody
 } from './auth.dto'
 import { verifyToken } from '~/utils/jwt'
@@ -452,6 +452,49 @@ export const createRootAdminValidator = validate(
   )
 )
 
+export const createAdminValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value, { req }) => {
+            if (req.decoded_authorization?.role !== UserRole.RootAdmin) {
+              throw new ErrorWithStatus({
+                message: 'You are not authorized to create admin',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            const user = await commonService.checkEmailExist(value)
+            if (user) {
+              throw new ErrorWithStatus({
+                message: 'Email already exists',
+                status: HTTP_STATUS.CONFLICT
+              })
+            }
+            if (req.decoded_authorization?.institution_id === null) {
+              throw new ErrorWithStatus({
+                message: 'You are not authorized to create admin',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            const institution = await commonService.getInstitutionById(req.decoded_authorization.institution_id)
+            if (!institution) {
+              throw new ErrorWithStatus({
+                message: 'Institution not found',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
 export const verifyRootAdminInviteTokenValidator = validate(
   checkSchema(
     {
@@ -491,7 +534,7 @@ export const verifyRootAdminInviteTokenValidator = validate(
                   token_string: value
                 })
               ])
-              if (decoded_root_admin_invite_token.token_type !== TokenType.RootAdminInviteToken) {
+              if (decoded_root_admin_invite_token.token_type !== TokenType.AdminInviteToken) {
                 throw new ErrorWithStatus({
                   message: 'Root admin invite token is invalid',
                   status: HTTP_STATUS.NOT_FOUND
@@ -504,7 +547,76 @@ export const verifyRootAdminInviteTokenValidator = validate(
                   status: HTTP_STATUS.NOT_FOUND
                 })
               }
-              req.decoded_root_admin_invite_token = decoded_root_admin_invite_token as RootAdminInviteTokenReqBody
+              req.decoded_root_admin_invite_token = decoded_root_admin_invite_token as AdminInviteTokenReqBody
+            } catch (error) {
+              throw new ErrorWithStatus({
+                message: capitalize((error as JsonWebTokenError).message),
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const verifyAdminInviteTokenValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value) => {
+            const user = await commonService.checkEmailExist(value)
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Email does not exist',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            return true
+          }
+        }
+      },
+      password: passwordSchema,
+      confirm_password: confirmPasswordSchema,
+      admin_invite_token: {
+        custom: {
+          options: async (value: string, { req }) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: 'Admin invite token is required',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            try {
+              const [decoded_admin_invite_token, userToken] = await Promise.all([
+                verifyToken({
+                  token: value,
+                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                }),
+                commonService.getUserTokenByTokenString({
+                  token_string: value
+                })
+              ])
+              if (decoded_admin_invite_token.token_type !== TokenType.AdminInviteToken) {
+                throw new ErrorWithStatus({
+                  message: 'Admin invite token is invalid',
+                  status: HTTP_STATUS.NOT_FOUND
+                })
+              }
+
+              if (!userToken) {
+                throw new ErrorWithStatus({
+                  message: 'Admin invite token is not found',
+                  status: HTTP_STATUS.NOT_FOUND
+                })
+              }
+
+              req.decoded_admin_invite_token = decoded_admin_invite_token as AdminInviteTokenReqBody
             } catch (error) {
               throw new ErrorWithStatus({
                 message: capitalize((error as JsonWebTokenError).message),

@@ -317,12 +317,10 @@ class AuthService {
 
   renewInviteToken = async (user: User) => {
     let token_type: $Enums.TokenType | undefined
-    if (user.role === UserRole.RootAdmin) {
-      token_type = TokenType.RootAdminInviteToken
+    if (user.role === UserRole.RootAdmin || user.role === UserRole.Admin) {
+      token_type = TokenType.AdminInviteToken
     } else if (user.role === UserRole.Staff) {
       token_type = TokenType.StaffInviteToken
-    } else if (user.role === UserRole.Admin) {
-      token_type = TokenType.AdminInviteToken
     }
     if (!token_type) {
       throw new Error('Token type is not found')
@@ -368,8 +366,24 @@ class AuthService {
 
     await this.sendTokenToUserEmail({
       user_id: user.user_id,
-      token_type: TokenType.RootAdminInviteToken,
+      token_type: TokenType.AdminInviteToken,
       role: UserRole.RootAdmin,
+      status: UserStatus.inactive,
+      institution_id: institution_id
+    })
+  }
+
+  createAdmin = async ({ email, institution_id }: { email: string; institution_id: string }) => {
+    const password = randomBytes(12).toString('hex')
+    const { password: hashedPassword } = await hashPassword(password)
+    const user = await prisma.user.create({
+      data: { email, password: hashedPassword, role: UserRole.Admin, institution_id, status: UserStatus.inactive }
+    })
+
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.AdminInviteToken,
+      role: UserRole.Admin,
       status: UserStatus.inactive,
       institution_id: institution_id
     })
