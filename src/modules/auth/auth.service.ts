@@ -239,6 +239,9 @@ class AuthService {
       where: { user_id },
       data: { password: hashedPassword }
     })
+    await prisma.userToken.deleteMany({
+      where: { user_id, token_type: { in: [TokenType.RefreshToken, TokenType.ForgotPasswordToken] } }
+    })
   }
 
   verifyEmailToken = async (user: User, token_string: string) => {
