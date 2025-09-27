@@ -13,6 +13,9 @@
     "prettier": "prettier --check .",
     "prettier:fix": "prettier --write ."
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -20,6 +23,7 @@
   "devDependencies": {
     "@eslint/js": "^9.23.0",
     "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/lodash": "^4.17.20",
@@ -32,14 +36,16 @@
     "prettier": "^3.5.3",
     "prisma": "^6.16.2",
     "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.13",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2",
+    "typescript": "^5.8.3",
     "typescript-eslint": "^8.29.0"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",

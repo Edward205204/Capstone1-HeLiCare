@@ -1,6 +1,13 @@
 import { $Enums, User, UserRole, UserStatus } from '@prisma/client'
+import { randomBytes } from 'crypto'
 import { TokenType } from '~/constants/token_type'
-import { AccessTokenPayload, RefreshTokenPayload, RegisterDto, TokenPayload } from '~/modules/auth/auth.dto'
+import {
+  AccessTokenPayload,
+  CreateStaffForInstitutionDto,
+  RefreshTokenPayload,
+  RegisterDto,
+  TokenPayload
+} from '~/modules/auth/auth.dto'
 import { prisma } from '~/utils/db'
 import { hashPassword } from '~/utils/hash'
 import { signToken, verifyToken } from '~/utils/jwt'
@@ -8,7 +15,7 @@ import { signToken, verifyToken } from '~/utils/jwt'
 class AuthService {
   constructor() {}
 
-  private async sightAccessTokenAndRefreshToken(payload: TokenPayload): Promise<string[]> {
+  private async signAccessTokenAndRefreshToken(payload: TokenPayload): Promise<string[]> {
     const [access_token, refresh_token] = await Promise.all([
       this.accessToken({ ...payload, token_type: TokenType.AccessToken }),
       this.refreshToken({ ...payload, token_type: TokenType.RefreshToken })
@@ -55,7 +62,7 @@ class AuthService {
     user_id: string
     status: UserStatus
   }) => {
-    const [access_token, refresh_token] = await this.sightAccessTokenAndRefreshToken({
+    const [access_token, refresh_token] = await this.signAccessTokenAndRefreshToken({
       user_id,
       status,
       institution_id,
@@ -205,10 +212,6 @@ class AuthService {
   }
 
   logout = async (token_string: string) => {
-    if (!token_string) {
-      // Tạm thời cho phép không dùng refresh token
-      return
-    }
     await prisma.userToken.delete({
       where: { token_string }
     })
@@ -240,7 +243,7 @@ class AuthService {
 
   verifyEmailToken = async (user: User, token_string: string) => {
     const [[access_token, refresh_token]] = await Promise.all([
-      this.sightAccessTokenAndRefreshToken({
+      this.signAccessTokenAndRefreshToken({
         user_id: user.user_id,
         status: UserStatus.active,
         role: user.role,
@@ -276,6 +279,100 @@ class AuthService {
       access_token,
       refresh_token
     }
+  }
+
+  createStaffForInstitution = async (data: CreateStaffForInstitutionDto) => {
+    const password = randomBytes(12).toString('hex')
+    const { password: hashedPassword } = await hashPassword(password)
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        password: hashedPassword,
+        status: UserStatus.inactive,
+        institution_id: data.institution_id,
+        role: UserRole.Staff
+      }
+    })
+
+    await prisma.staffProfile.create({
+      data: {
+        user_id: user.user_id,
+        institution_id: data.institution_id,
+        full_name: data.full_name,
+        phone: data.phone,
+        hire_date: data.hire_date,
+        notes: data.notes,
+        position: data.position
+      }
+    })
+
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.StaffInviteToken,
+      role: UserRole.Staff,
+      status: UserStatus.inactive,
+      institution_id: data.institution_id
+    })
+  }
+
+  renewInviteToken = async (user: User) => {
+    let token_type: $Enums.TokenType | undefined
+    if (user.role === UserRole.RootAdmin) {
+      token_type = TokenType.RootAdminInviteToken
+    } else if (user.role === UserRole.Staff) {
+      token_type = TokenType.StaffInviteToken
+    } else if (user.role === UserRole.Admin) {
+      token_type = TokenType.AdminInviteToken
+    }
+    if (!token_type) {
+      throw new Error('Token type is not found')
+    }
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: token_type,
+      role: user.role,
+      status: UserStatus.inactive,
+      institution_id: user.institution_id
+    })
+  }
+
+  verifyInviteTokenAndResetPassword = async ({
+    email,
+    password,
+    token_string
+  }: {
+    email: string
+    password: string
+    token_string: string
+  }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [{ password: hashedPassword }, _] = await Promise.all([
+      hashPassword(password),
+      prisma.userToken.delete({
+        where: { token_string }
+      })
+    ])
+
+    await prisma.user.update({
+      where: { email },
+      data: { status: UserStatus.active, password: hashedPassword }
+    })
+  }
+
+  createRootAdmin = async ({ email, institution_id }: { email: string; institution_id: string }) => {
+    const password = randomBytes(12).toString('hex')
+    const { password: hashedPassword } = await hashPassword(password)
+    const user = await prisma.user.create({
+      data: { email, password: hashedPassword, role: UserRole.RootAdmin, institution_id }
+    })
+
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.RootAdminInviteToken,
+      role: UserRole.RootAdmin,
+      status: UserStatus.inactive,
+      institution_id: institution_id
+    })
   }
 }
 

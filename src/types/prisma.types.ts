@@ -1,14 +1,6 @@
 // Re-export Prisma types để dễ sử dụng
-export type {
-  User,
-  Institution,
-  Resident,
-  Room,
-  UserRole,
-  CognitiveStatus,
-  MobilityStatus,
-  Prisma
-} from '../generated/prisma'
+
+import { CognitiveStatus, MobilityStatus, UserRole } from '@prisma/client'
 
 // Custom types cho API responses
 export type UserResponse = {

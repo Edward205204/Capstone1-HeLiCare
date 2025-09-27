@@ -1,4 +1,3 @@
-import { ParamSchema } from 'express-validator'
 import { checkSchema } from 'express-validator'
 import { validate } from '~/utils/validate'
 import { verifyPassword } from '~/utils/hash'
@@ -10,64 +9,29 @@ import { accessTokenDecode } from '~/utils/access_token_decode'
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken'
 import capitalize from 'lodash/capitalize'
 import { Request } from 'express'
-import { AccessTokenPayload, EmailVerifyTokenReqBody, RefreshTokenPayload } from './auth.dto'
+import {
+  AccessTokenPayload,
+  EmailVerifyTokenReqBody,
+  RefreshTokenPayload,
+  RootAdminInviteTokenReqBody,
+  StaffInviteTokenReqBody
+} from './auth.dto'
 import { verifyToken } from '~/utils/jwt'
 import { TokenType } from '~/constants/token_type'
-
-export const emailSchema: ParamSchema = {
-  notEmpty: {
-    errorMessage: 'Email is required'
-  },
-  isEmail: {
-    errorMessage: 'Email is invalid'
-  },
-  trim: true
-}
-
-export const isStrongPasswordSchema: ParamSchema = {
-  isStrongPassword: {
-    options: { minLength: 6, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1 },
-    errorMessage: 'Password must be strong'
-  }
-}
-
-export const passwordSchema: ParamSchema = {
-  notEmpty: {
-    errorMessage: 'Password is required'
-  },
-  isString: {
-    errorMessage: 'Password must be a string'
-  },
-  trim: true
-}
-
-export const confirmPasswordSchema: ParamSchema = {
-  ...passwordSchema,
-  custom: {
-    options: (value, { req }) => {
-      if (value !== req.body.password) {
-        throw new Error('Confirm password must be the same as password')
-      }
-      return true
-    }
-  }
-}
-
-export const userRoleSchema: ParamSchema = {
-  isIn: {
-    options: [
-      UserRole.PlatformSuperAdmin,
-      UserRole.RootAdmin,
-      UserRole.Admin,
-      UserRole.MedicalStaff,
-      UserRole.CareStaff,
-      UserRole.ReceptionStaff,
-      UserRole.Family,
-      UserRole.Resident
-    ],
-    errorMessage: 'User role is invalid'
-  }
-}
+import {
+  confirmPasswordSchema,
+  emailSchema,
+  forgotPasswordTokenSchema,
+  fullNameSchema,
+  hireDateSchema,
+  institutionIdSchema,
+  isStrongPasswordSchema,
+  notesSchema,
+  passwordSchema,
+  phoneSchema,
+  positionSchema,
+  userRoleSchema
+} from './auth.schema'
 
 export const loginValidator = validate(
   checkSchema(
@@ -78,7 +42,10 @@ export const loginValidator = validate(
           options: async (value, { req }) => {
             const user = await commonService.checkEmailExist(value)
             if (!user) {
-              throw new Error('Email is not existed')
+              throw new ErrorWithStatus({
+                message: 'Email does not exist',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
             }
             const isValidPassword = await verifyPassword(req.body.password, user.password)
             if (!isValidPassword) {
@@ -104,7 +71,10 @@ export const registerValidator = validate(
           options: async (value) => {
             const user = await commonService.checkEmailExist(value)
             if (user) {
-              throw new Error('Email is existed')
+              throw new ErrorWithStatus({
+                message: 'Email already exists',
+                status: HTTP_STATUS.CONFLICT
+              })
             }
             return true
           }
@@ -167,13 +137,12 @@ export const refreshTokenValidator = validate(
       refresh_token: {
         custom: {
           options: async (value: string, { req }) => {
-            // Tạm thời cho phép không dùng refresh token
-            // if (!value) {
-            //   throw new ErrorWithStatus({
-            //     message: ERROR_CODE.VALIDATION_ERROR + ': Refresh token is required',
-            //     status: HTTP_STATUS.UNAUTHORIZED
-            //   })
-            // }
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: 'Refresh token is required',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
 
             try {
               const [decoded_refresh_token] = await Promise.all([
@@ -245,53 +214,6 @@ export const forgotPasswordValidator = validate(
   )
 )
 
-const forgotPasswordTokenSchema: ParamSchema = {
-  custom: {
-    options: async (value: string, { req }) => {
-      if (!value) {
-        throw new ErrorWithStatus({
-          message: 'Forgot password token is required',
-          status: HTTP_STATUS.UNAUTHORIZED
-        })
-      }
-      try {
-        const decoded_forgot_password_token = await verifyToken({
-          token: value,
-          secretOrPublicKey: process.env.JWT_SECRET_KEY_FORGOT_PASSWORD_TOKEN as string
-        })
-
-        const { user_id } = decoded_forgot_password_token
-        const user = await commonService.getUserById(user_id as string)
-        if (!user) {
-          throw new ErrorWithStatus({
-            message: 'Forgot password token is invalid',
-            status: HTTP_STATUS.NOT_FOUND
-          })
-        }
-
-        const userToken = await commonService.getUserTokenByTokenString({
-          token_string: value
-        })
-
-        if (!userToken) {
-          throw new ErrorWithStatus({
-            message: 'Forgot password token is invalid',
-            status: HTTP_STATUS.NOT_FOUND
-          })
-        }
-
-        req.user = user
-      } catch (error) {
-        throw new ErrorWithStatus({
-          message: capitalize((error as JsonWebTokenError).message),
-          status: HTTP_STATUS.UNAUTHORIZED
-        })
-      }
-      return true
-    }
-  }
-}
-
 export const verifyForgotPasswordValidator = validate(
   checkSchema(
     {
@@ -329,7 +251,7 @@ export const emailVerifyTokenValidator = validate(
               const [decoded_email_verify_token, userToken] = await Promise.all([
                 verifyToken({
                   token: value,
-                  secretOrPublicKey: process.env.JWT_SECRET_KEY_EMAIL_VERIFY_TOKEN as string
+                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
                 }),
                 commonService.getUserTokenByTokenString({
                   token_string: value
@@ -357,6 +279,269 @@ export const emailVerifyTokenValidator = validate(
                 status: HTTP_STATUS.UNAUTHORIZED
               })
             }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const createStaffForInstitutionValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value) => {
+            const user = await commonService.checkEmailExist(value)
+            if (user) {
+              throw new ErrorWithStatus({
+                message: 'Email already exists',
+                status: HTTP_STATUS.CONFLICT
+              })
+            }
+            return true
+          }
+        }
+      },
+      full_name: fullNameSchema,
+      phone: phoneSchema,
+      hire_date: hireDateSchema,
+      position: positionSchema,
+      notes: notesSchema,
+      institution_id: {
+        ...institutionIdSchema,
+        custom: {
+          options: async (value, { req }) => {
+            if (
+              req.decoded_authorization?.role !== UserRole.Admin &&
+              req.decoded_authorization?.role !== UserRole.RootAdmin
+            ) {
+              throw new ErrorWithStatus({
+                message: 'You are not authorized to create staff for institution',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            const institution = await commonService.getInstitutionById(value)
+            if (!institution) {
+              throw new ErrorWithStatus({
+                message: 'Institution not found',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const verifyStaffInviteTokenValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value) => {
+            const user = await commonService.checkEmailExist(value)
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Email does not exist',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            return true
+          }
+        }
+      },
+      password: passwordSchema,
+      confirm_password: confirmPasswordSchema,
+      staff_invite_token: {
+        custom: {
+          options: async (value: string, { req }) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: 'Staff invite token is required',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            try {
+              const [decoded_staff_invite_token, userToken] = await Promise.all([
+                verifyToken({
+                  token: value,
+                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                }),
+                commonService.getUserTokenByTokenString({
+                  token_string: value
+                })
+              ])
+              if (decoded_staff_invite_token.token_type !== TokenType.StaffInviteToken) {
+                throw new ErrorWithStatus({
+                  message: 'Staff invite token is invalid',
+                  status: HTTP_STATUS.NOT_FOUND
+                })
+              }
+
+              if (!userToken) {
+                throw new ErrorWithStatus({
+                  message: 'Staff invite token is not found',
+                  status: HTTP_STATUS.NOT_FOUND
+                })
+              }
+              req.decoded_staff_invite_token = decoded_staff_invite_token as StaffInviteTokenReqBody
+            } catch (error) {
+              throw new ErrorWithStatus({
+                message: capitalize((error as JsonWebTokenError).message),
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const createRootAdminValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value, { req }) => {
+            if (req.decoded_authorization?.role !== UserRole.PlatformSuperAdmin) {
+              throw new ErrorWithStatus({
+                message: 'You are not authorized to create root admin',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            const user = await commonService.checkEmailExist(value)
+            if (user) {
+              throw new ErrorWithStatus({
+                message: 'Email already exists',
+                status: HTTP_STATUS.CONFLICT
+              })
+            }
+            return true
+          }
+        }
+      },
+      institution_id: {
+        ...institutionIdSchema,
+        custom: {
+          options: async (value) => {
+            const institution = await commonService.getInstitutionById(value)
+            if (!institution) {
+              throw new ErrorWithStatus({
+                message: 'Institution not found',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const verifyRootAdminInviteTokenValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value) => {
+            const user = await commonService.checkEmailExist(value)
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Email does not exist',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            return true
+          }
+        }
+      },
+      password: passwordSchema,
+      confirm_password: confirmPasswordSchema,
+      root_admin_invite_token: {
+        custom: {
+          options: async (value: string, { req }) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: 'Root admin invite token is required',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            try {
+              const [decoded_root_admin_invite_token, userToken] = await Promise.all([
+                verifyToken({
+                  token: value,
+                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                }),
+                commonService.getUserTokenByTokenString({
+                  token_string: value
+                })
+              ])
+              if (decoded_root_admin_invite_token.token_type !== TokenType.RootAdminInviteToken) {
+                throw new ErrorWithStatus({
+                  message: 'Root admin invite token is invalid',
+                  status: HTTP_STATUS.NOT_FOUND
+                })
+              }
+
+              if (!userToken) {
+                throw new ErrorWithStatus({
+                  message: 'Root admin invite token is not found',
+                  status: HTTP_STATUS.NOT_FOUND
+                })
+              }
+              req.decoded_root_admin_invite_token = decoded_root_admin_invite_token as RootAdminInviteTokenReqBody
+            } catch (error) {
+              throw new ErrorWithStatus({
+                message: capitalize((error as JsonWebTokenError).message),
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const renewInviteTokenValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value, { req }) => {
+            const user = await commonService.checkEmailExist(value)
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Email does not exist',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            if (user.role !== UserRole.Staff && user.role !== UserRole.RootAdmin && user.role !== UserRole.Admin) {
+              throw new ErrorWithStatus({
+                message:
+                  'Email is not eligible for renew invite token, only staff, root admin and admin can renew invite token',
+                status: HTTP_STATUS.FORBIDDEN
+              })
+            }
+            ;(req as Request).user = user
             return true
           }
         }
