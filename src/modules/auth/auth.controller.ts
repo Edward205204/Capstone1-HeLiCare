@@ -3,7 +3,7 @@ import { Request, Response } from 'express'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { AuthService, authService as authServiceInstance } from './auth.service'
 import { User, UserStatus } from '@prisma/client'
-import { CreateStaffForInstitutionDto, EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
+import { AccessTokenPayload, CreateStaffForInstitutionDto, EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
 
 class AuthController {
   constructor(
@@ -148,6 +148,24 @@ class AuthController {
     await this.authService.renewInviteToken(user)
     res.status(HTTP_STATUS.OK).json({
       message: 'Renew token successfully'
+    })
+  }
+
+  createAdmin = async (req: Request, res: Response) => {
+    const { email } = req.body
+    const institution_id = (req.decoded_authorization as AccessTokenPayload).institution_id as string
+    await this.authService.createAdmin({ email, institution_id })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Create admin successfully'
+    })
+  }
+
+  verifyAdminInviteAndResetPassword = async (req: Request, res: Response) => {
+    const token_string = req.body.admin_invite_token
+    const { email, password } = req.body
+    await this.authService.verifyInviteTokenAndResetPassword({ email, password, token_string })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Verify admin invite successfully'
     })
   }
 }

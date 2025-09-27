@@ -168,7 +168,6 @@ enum TokenType {
   EmailVerifyToken
   ForgotPasswordToken
   StaffInviteToken
-  RootAdminInviteToken
   AdminInviteToken
 }
 
