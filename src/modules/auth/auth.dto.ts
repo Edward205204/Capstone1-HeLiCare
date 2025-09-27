@@ -1,4 +1,4 @@
-import { UserRole, UserStatus } from '@prisma/client'
+import { StaffPosition, UserRole, UserStatus } from '@prisma/client'
 import { JwtPayload } from 'jsonwebtoken'
 import { TokenType } from '~/constants/token_type'
 
@@ -18,17 +18,16 @@ export interface RefreshTokenPayload extends TokenPayload {
   token_type: TokenType.RefreshToken
 }
 
-export interface RefreshTokenReqBody {
-  refresh_token: TokenType
-}
-
-export interface EmailVerifyTokenPayload {
-  email: string
-  token_type: TokenType.EmailVerifyToken
-}
-
 export interface EmailVerifyTokenReqBody extends TokenPayload {
   token_type: TokenType.EmailVerifyToken
+}
+
+export interface StaffInviteTokenReqBody extends TokenPayload {
+  token_type: TokenType.StaffInviteToken
+}
+
+export interface RootAdminInviteTokenReqBody extends TokenPayload {
+  token_type: TokenType.RootAdminInviteToken
 }
 
 export interface ForgotPasswordTokenPayload {
@@ -41,4 +40,14 @@ export interface RegisterDto {
   password: string
   confirm_password: string
   role: UserRole
+}
+
+export interface CreateStaffForInstitutionDto {
+  email: string
+  full_name: string
+  phone: string
+  hire_date: string
+  notes: string
+  institution_id: string
+  position: StaffPosition
 }

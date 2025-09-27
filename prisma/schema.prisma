@@ -24,12 +24,22 @@ enum UserRole {
   PlatformSuperAdmin
   RootAdmin
   Admin
-  MedicalStaff
-  CareStaff
-  ReceptionStaff
+  Staff
   Family
   Resident
 }
+
+enum StaffPosition {
+  NURSE              // Y tá chăm sóc trực tiếp
+  CAREGIVER          // Nhân viên chăm sóc, hỗ trợ sinh hoạt hằng ngày
+  THERAPIST          // Vật lý trị liệu / occupational therapy
+  PHYSICIAN          // Bác sĩ theo dõi sức khỏe
+  SOCIAL_WORKER      // Nhân viên xã hội, tư vấn tâm lý
+  ACTIVITY_COORDINATOR // Điều phối hoạt động, giải trí
+  DIETITIAN          // Chuyên viên dinh dưỡng
+  OTHER              // Các vị trí khác
+}
+
 
 enum CognitiveStatus {
   NORMAL
@@ -157,6 +167,9 @@ enum TokenType {
   RefreshToken
   EmailVerifyToken
   ForgotPasswordToken
+  StaffInviteToken
+  RootAdminInviteToken
+  AdminInviteToken
 }
 
 enum UserStatus {
@@ -164,17 +177,19 @@ enum UserStatus {
   inactive
 }
 
+
 model Institution {
   institution_id String   @id @default(uuid())
   name           String
-  address        String
-  contact_info   Json
+  address        Json     @default("{}")
+  contact_info   Json   
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
   users     User[]
   rooms     Room[]
   residents Resident[]
+  staffProfiles StaffProfile[]
 }
 
 model User {
@@ -193,6 +208,22 @@ model User {
   residentApplication      ResidentApplication[]
   assignedResidents        Resident[] @relation("AssignedStaff")
   resident                 Resident? @relation("ResidentUser")
+  staffProfile             StaffProfile?
+}
+
+
+model StaffProfile {
+  user_id       String   @unique @id
+  institution_id String 
+  full_name     String
+  phone         String
+  position      StaffPosition
+  hire_date     DateTime   @default(now())
+  notes         String?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  user         User        @relation(fields: [user_id], references: [user_id])
+  institution  Institution @relation(fields: [institution_id], references: [institution_id])
 }
 
 model FamilyProfile {
