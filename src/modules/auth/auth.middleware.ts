@@ -1,6 +1,6 @@
 import { checkSchema } from 'express-validator'
 import { validate } from '~/utils/validate'
-import { verifyPassword } from '~/utils/hash'
+import { hashPassword, verifyPassword } from '~/utils/hash'
 import { commonService } from '~/common/common.service'
 import { UserRole } from '@prisma/client'
 import { ErrorWithStatus } from '~/models/error'
@@ -32,6 +32,7 @@ import {
   positionSchema,
   userRoleSchema
 } from './auth.schema'
+import { env } from '~/utils/dot.env'
 
 export const loginValidator = validate(
   checkSchema(
@@ -47,16 +48,30 @@ export const loginValidator = validate(
                 status: HTTP_STATUS.UNAUTHORIZED
               })
             }
-            const isValidPassword = await verifyPassword(req.body.password, user.password)
-            if (!isValidPassword) {
-              throw new Error('Password is incorrect')
-            }
             req.user = user
             return true
           }
         }
       },
-      password: passwordSchema
+      password: {
+        ...passwordSchema,
+        custom: {
+          options: async (value, { req }) => {
+            const user = await commonService.checkEmailExist(req.body.email)
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Email does not exist',
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            const isValidPassword = await verifyPassword(value, user.password)
+            if (!isValidPassword) {
+              throw new Error('Password is incorrect')
+            }
+            return true
+          }
+        }
+      }
     },
     ['body']
   )
@@ -148,7 +163,7 @@ export const refreshTokenValidator = validate(
               const [decoded_refresh_token] = await Promise.all([
                 verifyToken({
                   token: value,
-                  secretOrPublicKey: process.env.JWT_SECRET_KEY_REFRESH_TOKEN as string
+                  secretOrPublicKey: env.JWT_SECRET_KEY_REFRESH_TOKEN as string
                 }),
                 commonService.getUserToken({
                   user_id: (req.decoded_authorization as AccessTokenPayload).user_id,
@@ -251,7 +266,7 @@ export const emailVerifyTokenValidator = validate(
               const [decoded_email_verify_token, userToken] = await Promise.all([
                 verifyToken({
                   token: value,
-                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                  secretOrPublicKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string
                 }),
                 commonService.getUserTokenByTokenString({
                   token_string: value
@@ -373,7 +388,7 @@ export const verifyStaffInviteTokenValidator = validate(
               const [decoded_staff_invite_token, userToken] = await Promise.all([
                 verifyToken({
                   token: value,
-                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                  secretOrPublicKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string
                 }),
                 commonService.getUserTokenByTokenString({
                   token_string: value
@@ -528,7 +543,7 @@ export const verifyRootAdminInviteTokenValidator = validate(
               const [decoded_root_admin_invite_token, userToken] = await Promise.all([
                 verifyToken({
                   token: value,
-                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                  secretOrPublicKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string
                 }),
                 commonService.getUserTokenByTokenString({
                   token_string: value
@@ -596,7 +611,7 @@ export const verifyAdminInviteTokenValidator = validate(
               const [decoded_admin_invite_token, userToken] = await Promise.all([
                 verifyToken({
                   token: value,
-                  secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+                  secretOrPublicKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string
                 }),
                 commonService.getUserTokenByTokenString({
                   token_string: value

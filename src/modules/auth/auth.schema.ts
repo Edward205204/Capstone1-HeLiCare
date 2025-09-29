@@ -6,6 +6,7 @@ import { commonService } from '~/common/common.service'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { ErrorWithStatus } from '~/models/error'
 import { verifyToken } from '~/utils/jwt'
+import { env } from '~/utils/dot.env'
 
 export const emailSchema: ParamSchema = {
   notEmpty: {
@@ -74,7 +75,7 @@ export const forgotPasswordTokenSchema: ParamSchema = {
       try {
         const decoded_forgot_password_token = await verifyToken({
           token: value,
-          secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+          secretOrPublicKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string
         })
 
         const { user_id } = decoded_forgot_password_token
