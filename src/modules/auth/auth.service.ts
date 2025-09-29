@@ -9,6 +9,7 @@ import {
   TokenPayload
 } from '~/modules/auth/auth.dto'
 import { prisma } from '~/utils/db'
+import { env } from '~/utils/dot.env'
 import { hashPassword } from '~/utils/hash'
 import { signToken, verifyToken } from '~/utils/jwt'
 
@@ -24,30 +25,30 @@ class AuthService {
   }
   private async accessToken(payload: AccessTokenPayload): Promise<string> {
     return await signToken({
-      secretOrPrivateKey: process.env.JWT_SECRET_KEY_ACCESS_TOKEN as string,
+      secretOrPrivateKey: env.JWT_SECRET_KEY_ACCESS_TOKEN as string,
       payload: { ...payload },
-      option: { expiresIn: process.env.ACCESS_TOKEN_EXPIRATION_TIME }
+      option: { expiresIn: env.ACCESS_TOKEN_EXPIRATION_TIME }
     })
   }
 
   private async refreshToken(payload: RefreshTokenPayload): Promise<string> {
     if (payload.exp) {
       return await signToken({
-        secretOrPrivateKey: process.env.JWT_SECRET_KEY_REFRESH_TOKEN as string,
+        secretOrPrivateKey: env.JWT_SECRET_KEY_REFRESH_TOKEN as string,
         payload: { ...payload }
       })
     }
     return await signToken({
-      secretOrPrivateKey: process.env.JWT_SECRET_KEY_REFRESH_TOKEN as string,
+      secretOrPrivateKey: env.JWT_SECRET_KEY_REFRESH_TOKEN as string,
       payload: { ...payload },
-      option: { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION_TIME }
+      option: { expiresIn: env.REFRESH_TOKEN_EXPIRATION_TIME }
     })
   }
 
   private async decodeRefreshToken(refresh_token: string) {
     return verifyToken({
       token: refresh_token,
-      secretOrPublicKey: process.env.JWT_SECRET_KEY_REFRESH_TOKEN as string
+      secretOrPublicKey: env.JWT_SECRET_KEY_REFRESH_TOKEN as string
     })
   }
 
@@ -88,16 +89,16 @@ class AuthService {
 
   private async commonToken(payload: TokenPayload & { token_type: $Enums.TokenType }): Promise<string> {
     return await signToken({
-      secretOrPrivateKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string,
+      secretOrPrivateKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string,
       payload: { ...payload },
-      option: { expiresIn: process.env.COMMON_VERIFY_TOKEN_EXPIRATION_TIME }
+      option: { expiresIn: env.COMMON_VERIFY_TOKEN_EXPIRATION_TIME }
     })
   }
 
   private async decodeCommonToken(token: string) {
     return await verifyToken({
       token: token,
-      secretOrPublicKey: process.env.JWT_SECRET_KEY_COMMON_TOKEN as string
+      secretOrPublicKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string
     })
   }
 

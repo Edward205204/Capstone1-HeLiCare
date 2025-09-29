@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt'
+import { env } from './dot.env'
 
-const HASH_PASSWORD_SECRET_KEY = process.env.PASSWORD_PEPPER || 'default_pepper'
+const HASH_PASSWORD_SECRET_KEY = env.PASSWORD_PEPPER || 'default_pepper'
 export async function hashPassword(password: string): Promise<{ password: string }> {
   try {
     const passwordWithHash = password + HASH_PASSWORD_SECRET_KEY
