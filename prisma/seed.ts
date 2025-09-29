@@ -1,8 +1,9 @@
-import { hashPassword } from '../src/utils/hash'
-import { UserRole } from '@prisma/client'
+import { hashPassword, verifyPassword } from '../src/utils/hash'
+import { UserRole, UserStatus } from '@prisma/client'
 import { prisma } from './../src/utils/db'
+import { env } from '../src/utils/dot.env'
 
-async function main() {
+export async function main() {
   // 1. Xóa tất cả super users
   await prisma.user.deleteMany({
     where: {
@@ -12,18 +13,20 @@ async function main() {
 
   console.log('Deleted all PlatformSuperAdmin roles')
 
-  const superUsers = process.env.PLATFORM_SUPER_ADMIN_EMAIL?.split(',')
+  const superUsers = env.PLATFORM_SUPER_ADMIN_EMAIL?.split(',')
   if (!superUsers) {
     throw new Error('PLATFORM_SUPER_ADMIN_EMAIL is not set')
   }
 
-  const hashedPassword = await hashPassword(process.env.DEFAULT_PASSWORD || '123456')
+  const hashedPassword = await hashPassword(env.DEFAULT_PASSWORD || '123456')
+
   for (const email of superUsers) {
     await prisma.user.create({
       data: {
         email,
         password: hashedPassword.password,
-        role: UserRole.PlatformSuperAdmin
+        role: UserRole.PlatformSuperAdmin,
+        status: UserStatus.active
       }
     })
     console.log(email)
