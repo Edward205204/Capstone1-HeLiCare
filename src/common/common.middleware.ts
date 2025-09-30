@@ -3,6 +3,15 @@ import { HTTP_STATUS } from '~/constants/http_status'
 import omit from 'lodash/omit'
 import { ErrorWithStatus } from '~/models/error'
 import { UserRole } from '@prisma/client'
+import { validate } from '~/utils/validate'
+import { checkSchema } from 'express-validator'
+import {
+  institutionAddressSchema,
+  institutionContactInfoSchema,
+  institutionIdSchema,
+  institutionNameSchema
+} from '~/modules/institution/institution.schema'
+import makePatchSchema from '~/utils/make_path_schema'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const defaultErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
@@ -29,3 +38,23 @@ export const isHandleByRootFlatformAdmin = (req: Request, res: Response, next: N
   }
   next()
 }
+
+export const institutionIdValidator = validate(
+  checkSchema(
+    {
+      institution_id: institutionIdSchema
+    },
+    ['params']
+  )
+)
+
+export const updateInstitutionValidator = validate(
+  checkSchema(
+    makePatchSchema({
+      name: institutionNameSchema,
+      address: institutionAddressSchema,
+      contact_info: institutionContactInfoSchema
+    }),
+    ['body']
+  )
+)

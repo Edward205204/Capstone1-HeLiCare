@@ -71,3 +71,13 @@ export const institutionContactInfoSchema: ParamSchema = {
   },
   trim: true
 }
+
+export const institutionIdSchema: ParamSchema = {
+  notEmpty: {
+    errorMessage: 'Institution ID is required'
+  },
+  isUUID: {
+    errorMessage: 'Institution ID must be a valid UUID'
+  },
+  trim: true
+}

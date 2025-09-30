@@ -17,6 +17,22 @@ class InstitutionController {
     const data = await this.institutionService.getListInstitution()
     res.status(HTTP_STATUS.OK).json({ message: 'Institution list fetched successfully', data })
   }
+
+  getListInstitutionPublic = async (req: Request, res: Response) => {
+    const data = await this.institutionService.getListInstitution()
+    res.status(HTTP_STATUS.OK).json({ message: 'Institution list fetched successfully', data })
+  }
+
+  getInstitutionById = async (req: Request, res: Response) => {
+    const { institution_id } = req.params
+    const data = await this.institutionService.getInstitutionById(institution_id)
+    res.status(HTTP_STATUS.OK).json({ message: 'Get institution by id successfully', data })
+  }
+
+  updateInstitution = async (req: Request, res: Response) => {
+    const { institution_id } = req.params
+    res.status(HTTP_STATUS.OK).json({ message: 'Update institution by id successfully', data: institution_id })
+  }
 }
 
 const institutionController = new InstitutionController()
