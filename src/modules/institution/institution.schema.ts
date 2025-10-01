@@ -40,33 +40,50 @@ export const institutionAddressSchema: ParamSchema = {
   trim: true
 }
 
-export const institutionContactInfoSchema: ParamSchema = {
-  notEmpty: {
-    errorMessage: 'Contact info is required'
-  },
-  isJSON: {
-    errorMessage: 'Contact info must be a string'
-  },
+export const institutionContactInfoCreateSchema: ParamSchema = {
+  notEmpty: { errorMessage: 'Contact info is required' },
   custom: {
     options: (value) => {
-      try {
-        const obj = JSON.parse(value)
-
-        const requiredFields: (keyof ContactJson)[] = ['email', 'phone']
-        for (const key of requiredFields) {
-          if (typeof obj[key] !== 'string' || obj[key].trim() === '') {
-            throw new Error(`Missing or invalid field: ${key}`)
-          }
-        }
-
-        if ('facebook' in obj && typeof obj.facebook !== 'string') {
-          throw new Error('facebook must be a string if provided')
-        }
-
-        return true
-      } catch (err: any) {
-        throw new Error(err.message || 'Invalid contact info JSON')
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error('Contact info must be a JSON object')
       }
+      if (!value.email) throw new Error('Email is required')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) {
+        throw new Error('Email must be a valid email address')
+      }
+      if (!value.phone) throw new Error('Phone is required')
+      if (!/^0[0-9]{9}$/.test(value.phone)) {
+        throw new Error('Phone must be a valid phone number')
+      }
+      if ('facebook' in value && typeof value.facebook !== 'string') {
+        throw new Error('facebook must be a string if provided')
+      }
+      return true
+    }
+  }
+}
+
+export const institutionContactInfoPatchSchema: ParamSchema = {
+  optional: true,
+
+  custom: {
+    options: (value) => {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error('Contact info must be a JSON object')
+      }
+
+      // validate email
+      if (value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) {
+        throw new Error('Email must be a valid email')
+      }
+
+      if (value.phone && !/^0[0-9]{9}$/.test(value.phone)) {
+        throw new Error('Phone must be a valid phone number')
+      }
+      if ('facebook' in value && typeof value.facebook !== 'string') {
+        throw new Error('facebook must be a string if provided')
+      }
+      return true
     }
   },
   trim: true

@@ -31,8 +31,15 @@ class InstitutionController {
 
   updateInstitution = async (req: Request, res: Response) => {
     const { institution_id } = req.params
+    const patchData = req.body
+    console.log(patchData)
     res.status(HTTP_STATUS.OK).json({ message: 'Update institution by id successfully', data: institution_id })
   }
+
+  // updateInstitutionByInstitutionAdmin = async (req: Request, res: Response) => {
+  //   const { institution_id } = req.params
+  //   res.status(HTTP_STATUS.OK).json({ message: 'Update institution by id successfully', data: institution_id })
+  // }
 }
 
 const institutionController = new InstitutionController()
