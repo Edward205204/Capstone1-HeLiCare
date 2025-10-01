@@ -17,6 +17,11 @@ class InstitutionService {
     const institutions = await prisma.institution.findMany()
     return institutions
   }
+
+  getInstitutionById = async (institution_id: string) => {
+    const institution = await prisma.institution.findUnique({ where: { institution_id } })
+    return institution
+  }
 }
 
 const institutionService = new InstitutionService()
