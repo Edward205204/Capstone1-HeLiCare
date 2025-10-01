@@ -190,3 +190,38 @@ export const positionSchema: ParamSchema = {
     ]
   }
 }
+
+export const residentIdSchema: ParamSchema = {
+  isUUID: {
+    errorMessage: 'Resident ID is invalid'
+  },
+  custom: {
+    options: async (value, { req }) => {
+      const resident = await commonService.getResidentById(value)
+      if (!resident) {
+        throw new ErrorWithStatus({
+          message: 'Resident not found',
+          status: HTTP_STATUS.NOT_FOUND
+        })
+      }
+      req.resident = resident
+      return true
+    }
+  }
+}
+
+export const sendFamilyLinkSchema = {
+  resident_id: residentIdSchema,
+  family_email: emailSchema
+}
+
+export const familyLinkTokenSchema: ParamSchema = {
+  custom: {
+    options: async (value: string) => {
+      if (!value) {
+        throw new Error('Family link token is required')
+      }
+      return true
+    }
+  }
+}

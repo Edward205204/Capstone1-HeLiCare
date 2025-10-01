@@ -15,9 +15,13 @@ import {
   verifyForgotPasswordValidator,
   verifyRootAdminInviteTokenValidator,
   verifyStaffInviteTokenValidator,
-  verifyAdminInviteTokenValidator
+  verifyAdminInviteTokenValidator,
+  sendFamilyLinkValidator,
+  validateFamilyLinkTokenValidator,
+  confirmFamilyLinkValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
+import { isHandleByInstitutionAdmin } from '../institution/institution.middleware'
 
 const authRouter = Router()
 /**
@@ -199,6 +203,43 @@ authRouter.post(
   '/verify-admin-invite-and-reset-password',
   verifyAdminInviteTokenValidator,
   wrapRequestHandler(authController.verifyAdminInviteAndResetPassword)
+)
+
+/**
+ * @description Staff/Admin/RootAdmin gửi link kết nối đến email Family
+ * @method POST
+ * @path /auth/send-family-link
+ * @body {resident_id: string, family_email: string}
+ */
+authRouter.post(
+  '/send-family-link',
+  accessTokenValidator,
+  isHandleByInstitutionAdmin,
+  sendFamilyLinkValidator,
+  wrapRequestHandler(authController.sendFamilyLink)
+)
+
+/**
+ * @description Validate token family link để frontend redirect đến trang xác thực
+ * @method GET
+ * @path /auth/family-link/validate?family_link_token=...
+ */
+authRouter.get(
+  '/family-link/validate',
+  validateFamilyLinkTokenValidator,
+  wrapRequestHandler(authController.validateFamilyLinkToken)
+)
+
+/**
+ * @description Family nhấn nút xác nhận để liên kết với Resident và Institution
+ * @method POST
+ * @path /auth/family-link/confirm
+ * @body {family_link_token: string}
+ */
+authRouter.post(
+  '/family-link/confirm',
+  confirmFamilyLinkValidator,
+  wrapRequestHandler(authController.confirmFamilyLink)
 )
 
 export default authRouter
