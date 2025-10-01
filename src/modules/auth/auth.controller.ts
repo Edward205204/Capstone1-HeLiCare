@@ -168,6 +168,49 @@ class AuthController {
       message: 'Verify admin invite successfully'
     })
   }
+
+  connectResidentWithFamily = async (req: Request, res: Response) => {
+    const { resident_id, family_email } = req.body
+    const sender = req.user as User
+    await this.authService.sendFamilyLink({
+      sender_user_id: sender.user_id,
+      resident_id,
+      family_email
+    })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Send family link successfully'
+    })
+  }
+
+  sendFamilyLink = async (req: Request, res: Response) => {
+    const { resident_id, family_email } = req.body
+    const sender = req.user as User
+    await this.authService.sendFamilyLink({
+      sender_user_id: sender.user_id,
+      resident_id,
+      family_email
+    })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Send family link successfully'
+    })
+  }
+
+  validateFamilyLinkToken = async (req: Request, res: Response) => {
+    const token_string = req.query.family_link_token as string
+    const data = await this.authService.validateFamilyLinkToken(token_string)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Family link token is valid',
+      data
+    })
+  }
+
+  confirmFamilyLink = async (req: Request, res: Response) => {
+    const token_string = req.body.family_link_token as string
+    await this.authService.confirmFamilyLink(token_string)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Confirm family link successfully'
+    })
+  }
 }
 
 const authController = new AuthController()

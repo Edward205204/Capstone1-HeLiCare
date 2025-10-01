@@ -392,6 +392,79 @@ class AuthService {
       institution_id: institution_id
     })
   }
+
+  sendFamilyLink = async ({
+    sender_user_id,
+    resident_id,
+    family_email
+  }: {
+    sender_user_id: string
+    resident_id: string
+    family_email: string
+  }) => {
+    const [sender, resident, familyUser] = await Promise.all([
+      prisma.user.findUnique({ where: { user_id: sender_user_id } }),
+      prisma.resident.findUnique({ where: { resident_id } }),
+      prisma.user.findUnique({ where: { email: family_email } })
+    ])
+
+    if (!sender || !resident || !familyUser) return
+
+    const token = await this.generateAndSaveToken({
+      user_id: familyUser.user_id,
+      token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
+      role: familyUser.role,
+      status: familyUser.status,
+      institution_id: resident.institution_id
+    })
+
+    // Lưu trạng thái pending của mối liên kết
+    await prisma.familyResidentLink.upsert({
+      where: { family_user_id_resident_id: { family_user_id: familyUser.user_id, resident_id } },
+      update: { status: 'pending' },
+      create: { family_user_id: familyUser.user_id, resident_id, status: 'pending' }
+    })
+
+    // TODO: tích hợp dịch vụ email, tạm thời log link
+    const baseUrl = env.APP_URL || 'http://localhost:3000'
+    const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+    console.log('Family link URL:', link)
+  }
+
+  validateFamilyLinkToken = async (token_string: string) => {
+    const decoded = await this.decodeCommonToken(token_string)
+    const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
+    if (!userToken || decoded.token_type !== TokenType.FamilyLinkToken) {
+      throw new Error('Invalid family link token')
+    }
+    return decoded
+  }
+
+  confirmFamilyLink = async (token_string: string) => {
+    const decoded = await this.decodeCommonToken(token_string)
+    if (decoded.token_type !== TokenType.FamilyLinkToken) {
+      throw new Error('Invalid family link token')
+    }
+    const family_user_id = decoded.user_id as string
+    const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
+    if (!userToken) throw new Error('Family link token not found')
+
+    // Tìm resident từ institution_id trong token qua record pending gần nhất
+    const pendingLink = await prisma.familyResidentLink.findFirst({
+      where: { family_user_id, status: 'pending' },
+      orderBy: { created_at: 'desc' }
+    })
+    if (!pendingLink) throw new Error('No pending link found')
+
+    // Kích hoạt liên kết
+    await prisma.familyResidentLink.update({
+      where: { link_id: pendingLink.link_id },
+      data: { status: 'active' }
+    })
+
+    // Xoá token sau khi dùng
+    await prisma.userToken.delete({ where: { token_string } })
+  }
 }
 
 const authService = new AuthService()

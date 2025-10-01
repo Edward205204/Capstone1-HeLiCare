@@ -1,6 +1,6 @@
 import { checkSchema } from 'express-validator'
 import { validate } from '~/utils/validate'
-import { hashPassword, verifyPassword } from '~/utils/hash'
+import { verifyPassword } from '~/utils/hash'
 import { commonService } from '~/common/common.service'
 import { UserRole } from '@prisma/client'
 import { ErrorWithStatus } from '~/models/error'
@@ -30,7 +30,9 @@ import {
   passwordSchema,
   phoneSchema,
   positionSchema,
-  userRoleSchema
+  userRoleSchema,
+  sendFamilyLinkSchema,
+  familyLinkTokenSchema
 } from './auth.schema'
 import { env } from '~/utils/dot.env'
 
@@ -673,6 +675,33 @@ export const renewInviteTokenValidator = validate(
           }
         }
       }
+    },
+    ['body']
+  )
+)
+
+export const sendFamilyLinkValidator = validate(
+  checkSchema(
+    {
+      ...sendFamilyLinkSchema
+    },
+    ['body']
+  )
+)
+
+export const validateFamilyLinkTokenValidator = validate(
+  checkSchema(
+    {
+      family_link_token: familyLinkTokenSchema
+    },
+    ['query']
+  )
+)
+
+export const confirmFamilyLinkValidator = validate(
+  checkSchema(
+    {
+      family_link_token: familyLinkTokenSchema
     },
     ['body']
   )

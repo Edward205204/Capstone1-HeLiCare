@@ -35,6 +35,12 @@ export interface ForgotPasswordTokenPayload {
   token_type: TokenType.ForgotPasswordToken
 }
 
+export interface FamilyLinkTokenPayload extends TokenPayload {
+  token_type: TokenType.FamilyLinkToken
+  resident_id: string
+  institution_id: string
+}
+
 export interface RegisterDto {
   email: string
   password: string
