@@ -1,4 +1,4 @@
-import { Institution, User, UserToken } from '@prisma/client'
+import { Institution, Resident, User, UserToken } from '@prisma/client'
 import { TokenType } from '~/constants/token_type'
 import { prisma } from '~/utils/db'
 
@@ -27,6 +27,10 @@ class CommonService {
 
   getInstitutionById = (institution_id: string): Promise<Institution | null> => {
     return prisma.institution.findUnique({ where: { institution_id } })
+  }
+
+  getResidentById = (resident_id: string): Promise<Resident | null> => {
+    return prisma.resident.findUnique({ where: { resident_id } })
   }
 }
 

@@ -169,6 +169,7 @@ enum TokenType {
   ForgotPasswordToken
   StaffInviteToken
   AdminInviteToken
+  FamilyLinkToken
 }
 
 enum UserStatus {
@@ -208,6 +209,7 @@ model User {
   assignedResidents        Resident[] @relation("AssignedStaff")
   resident                 Resident? @relation("ResidentUser")
   staffProfile             StaffProfile?
+  familyResidentLinks      FamilyResidentLink[]
 }
 
 
@@ -284,6 +286,7 @@ model Resident {
   room           Room?        @relation(fields: [room_id], references: [room_id])
 
   assigned_staff User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
+  familyResidentLinks FamilyResidentLink[]
 }
 
 model Room {
@@ -298,4 +301,17 @@ model Room {
 
   institution Institution @relation(fields: [institution_id], references: [institution_id])
   residents   Resident[]
+}
+
+model FamilyResidentLink {
+  link_id         String         @id @default(uuid())
+  family_user_id  String
+  resident_id     String
+  status          FamilyLinkStatus @default(pending)
+  created_at      DateTime       @default(now())
+
+  family_user     User           @relation(fields: [family_user_id], references: [user_id])
+  resident        Resident       @relation(fields: [resident_id], references: [resident_id])
+
+  @@unique([family_user_id, resident_id])
 }
