@@ -1,6 +1,10 @@
 import AddressJson from '~/constants/address_json'
 import { ContactJson } from '~/constants/contact_json'
 import { prisma } from '~/utils/db'
+import { InstitutionUpdateData } from './institution.dto'
+import { InstitutionContractStatus } from '@prisma/client'
+
+// Interface cho dữ liệu update institution
 
 class InstitutionService {
   constructor() {}
@@ -14,12 +18,64 @@ class InstitutionService {
   }
 
   getListInstitution = async () => {
-    const institutions = await prisma.institution.findMany()
+    const institutions = await prisma.institution.findMany({ where: { status: InstitutionContractStatus.active } })
     return institutions
   }
 
   getInstitutionById = async (institution_id: string) => {
     const institution = await prisma.institution.findUnique({ where: { institution_id } })
+    return institution
+  }
+
+  updateInstitution = async ({
+    patchData,
+    institution_id
+  }: {
+    patchData: InstitutionUpdateData
+    institution_id: string
+  }) => {
+    // Chuyển đổi JsonValue thành InputJsonValue để tương thích với Prisma update
+    const { address, contact_info, ...restData } = patchData
+    const updateData = {
+      ...restData,
+      ...(address && { address: JSON.parse(JSON.stringify(address)) }),
+      ...(contact_info && { contact_info: JSON.parse(JSON.stringify(contact_info)) })
+    }
+
+    const institution = await prisma.institution.update({
+      where: { institution_id },
+      data: updateData
+    })
+    return institution
+  }
+
+  updateInstitutionByInstitutionAdmin = async ({
+    patchData,
+    institution_id
+  }: {
+    patchData: InstitutionUpdateData
+    institution_id: string
+  }) => {
+    // Chuyển đổi JsonValue thành InputJsonValue để tương thích với Prisma update
+    const { address, contact_info, ...restData } = patchData
+    const updateData = {
+      ...restData,
+      ...(address && { address: JSON.parse(JSON.stringify(address)) }),
+      ...(contact_info && { contact_info: JSON.parse(JSON.stringify(contact_info)) })
+    }
+
+    const institution = await prisma.institution.update({
+      where: { institution_id },
+      data: updateData
+    })
+    return institution
+  }
+
+  deleteInstitution = async (institution_id: string) => {
+    const institution = await prisma.institution.update({
+      where: { institution_id },
+      data: { status: InstitutionContractStatus.cancelled }
+    })
     return institution
   }
 }
