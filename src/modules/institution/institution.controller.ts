@@ -11,6 +11,7 @@ class InstitutionController {
   createInstitution = async (req: Request, res: Response) => {
     const { name, address, contact_info } = req.body
     await this.institutionService.createInstitution(name, address as AddressJson, contact_info as ContactJson)
+
     res.status(HTTP_STATUS.OK).json({ message: 'Institution created successfully' })
   }
 

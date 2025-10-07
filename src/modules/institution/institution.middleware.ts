@@ -40,7 +40,7 @@ export const institutionIdValidator = validate(
       institution_id: {
         ...institutionIdSchema,
         custom: {
-          options: async (value, { req }) => {
+          options: async (value) => {
             const institution = await commonService.getInstitutionById(value)
             if (!institution) {
               throw new ErrorWithStatus({

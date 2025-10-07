@@ -185,7 +185,7 @@ enum InstitutionContractStatus {
 model Institution {
   institution_id String   @id @default(uuid())
   name           String
-  address        Json     @default("{}")
+  address        Json    
   contact_info   Json   
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
