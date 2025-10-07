@@ -177,6 +177,10 @@ enum UserStatus {
   inactive
 }
 
+enum InstitutionContractStatus {
+  active
+  cancelled
+}
 
 model Institution {
   institution_id String   @id @default(uuid())
@@ -185,6 +189,7 @@ model Institution {
   contact_info   Json   
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
+  status         InstitutionContractStatus @default(active)
 
   users     User[]
   rooms     Room[]
