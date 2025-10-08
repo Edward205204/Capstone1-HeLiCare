@@ -187,6 +187,30 @@ enum Gender {
   female
 }
 
+
+enum ResidentApplicationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum DiseaseSeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum DiseaseStatus {
+  ACTIVE
+  RECOVERED
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
 model Institution {
   institution_id String   @id @default(uuid())
   name           String
@@ -200,6 +224,8 @@ model Institution {
   rooms     Room[]
   residents Resident[]
   staffProfiles StaffProfile[]
+  familyResidentLinks FamilyResidentLink[]
+  residentApplications ResidentApplication[]
 }
 
 model User {
@@ -220,8 +246,8 @@ model User {
   resident                 Resident? @relation("ResidentUser")
   staffProfile             StaffProfile?
   familyResidentLinks      FamilyResidentLink[]
+  healthAssessments        HealthAssessment[] @relation("StaffAssessments")
 }
-
 
 model StaffProfile {
   user_id       String   @unique @id
@@ -269,15 +295,14 @@ model Resident {
   full_name         String
   gender            Gender
   date_of_birth     DateTime
-  cognitive_status  CognitiveStatus?
-  mobility_status   MobilityStatus?
-  chronic_diseases  Json?
-  allergies         Json?
   
   notes             String?
   assigned_staff_id String?
   admission_date    DateTime
   created_at        DateTime @default(now())
+
+  chronicDiseases   ChronicDisease[]
+  allergies         Allergy[]
 
   user           User?        @relation("ResidentUser", fields: [user_id], references: [user_id])
 
@@ -286,7 +311,64 @@ model Resident {
 
   assigned_staff User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
   familyResidentLinks FamilyResidentLink[]
+  healthAssessments HealthAssessment[]
 }
+
+model HealthAssessment {
+  assessment_id   String    @id @default(uuid())
+  resident_id     String   
+  assessed_by_id  String  
+
+  cognitive_status  CognitiveStatus @default(NORMAL)
+  mobility_status   MobilityStatus @default(INDEPENDENT)
+  weight_kg         Float?
+  height_cm         Float?
+  bmi               Float?
+  
+  temperature_c     Float?
+  blood_pressure_systolic   Int?
+  blood_pressure_diastolic  Int?
+  heart_rate        Int?
+  respiratory_rate  Int?
+  oxygen_saturation Int?
+
+  notes             String?   
+  created_at        DateTime  @default(now())
+
+  resident         Resident  @relation(fields: [resident_id], references: [resident_id])
+  assessed_by      User      @relation("StaffAssessments", fields: [assessed_by_id], references: [user_id])
+  @@index([resident_id])
+}
+
+// Bệnh mãn tính
+model ChronicDisease {
+  id           String   @id @default(uuid())
+  resident_id  String
+  name         String                     // Tên bệnh
+  diagnosed_at DateTime?                  // Ngày phát hiện
+  severity     DiseaseSeverity?           // Mức độ (enum)
+  status       DiseaseStatus? @default(ACTIVE) // Còn mắc / đã khỏi
+  note         String?                    // Ghi chú thêm
+  created_at   DateTime   @default(now())
+
+  resident     Resident  @relation(fields: [resident_id], references: [resident_id])
+}
+
+// Dị ứng
+model Allergy {
+  id           String   @id @default(uuid())
+  resident_id  String
+  substance    String                     // Tác nhân gây dị ứng
+  reaction     String?                    // Phản ứng (vd: phát ban, khó thở)
+  severity     AllergySeverity?           // Mức độ phản ứng
+  note         String?
+  created_at   DateTime   @default(now())
+
+  resident     Resident  @relation(fields: [resident_id], references: [resident_id])
+}
+
+
+
 
 model Room {
   room_id           String   @id @default(uuid())
@@ -306,26 +388,24 @@ model FamilyResidentLink {
   link_id         String         @id @default(uuid())
   family_user_id  String
   resident_id     String
+  institution_id  String
   status          FamilyLinkStatus @default(pending)
   created_at      DateTime       @default(now())
 
   family_user     User           @relation(fields: [family_user_id], references: [user_id])
   resident        Resident       @relation(fields: [resident_id], references: [resident_id])
-
+  institution     Institution    @relation(fields: [institution_id], references: [institution_id])
   @@unique([family_user_id, resident_id])
-}
-
-enum ResidentApplicationStatus {
-  pending
-  approved
-  rejected
 }
 
 model ResidentApplication {
   application_id String   @id @default(uuid())
   family_user_id String? // null khi resident tự đăng ký
   resident_id    String
+  institution_id String
   status         ResidentApplicationStatus @default(pending)
   notes          String?
   created_at     DateTime @default(now())
+  institution    Institution    @relation(fields: [institution_id], references: [institution_id])
 }
+
