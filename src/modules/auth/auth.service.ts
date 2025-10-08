@@ -1,6 +1,8 @@
-import { $Enums, User, UserRole, UserStatus } from '@prisma/client'
+import { $Enums, FamilyLinkStatus, User, UserRole, UserStatus } from '@prisma/client'
 import { randomBytes } from 'crypto'
+import { HTTP_STATUS } from '~/constants/http_status'
 import { TokenType } from '~/constants/token_type'
+import { ErrorWithStatus } from '~/models/error'
 import {
   AccessTokenPayload,
   CreateStaffForInstitutionDto,
@@ -435,23 +437,26 @@ class AuthService {
     const decoded = await this.decodeCommonToken(token_string)
     const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
     if (!userToken || decoded.token_type !== TokenType.FamilyLinkToken) {
-      throw new Error('Invalid family link token')
+      throw new ErrorWithStatus({
+        message: 'Invalid family link token',
+        status: HTTP_STATUS.NOT_FOUND
+      })
     }
     return decoded
   }
 
   confirmFamilyLink = async (token_string: string) => {
     const decoded = await this.decodeCommonToken(token_string)
-    if (decoded.token_type !== TokenType.FamilyLinkToken) {
-      throw new Error('Invalid family link token')
+    if (!decoded || decoded.token_type !== TokenType.FamilyLinkToken) {
+      throw new ErrorWithStatus({ message: 'Invalid family link token', status: HTTP_STATUS.BAD_REQUEST })
     }
     const family_user_id = decoded.user_id as string
     const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
-    if (!userToken) throw new Error('Family link token not found')
+    if (!userToken) throw new ErrorWithStatus({ message: 'Family link token not found', status: HTTP_STATUS.NOT_FOUND })
 
     // Tìm resident từ institution_id trong token qua record pending gần nhất
     const pendingLink = await prisma.familyResidentLink.findFirst({
-      where: { family_user_id, status: 'pending' },
+      where: { family_user_id, status: FamilyLinkStatus.pending },
       orderBy: { created_at: 'desc' }
     })
     if (!pendingLink) throw new Error('No pending link found')
@@ -459,11 +464,36 @@ class AuthService {
     // Kích hoạt liên kết
     await prisma.familyResidentLink.update({
       where: { link_id: pendingLink.link_id },
-      data: { status: 'active' }
+      data: { status: FamilyLinkStatus.active }
     })
 
     // Xoá token sau khi dùng
     await prisma.userToken.delete({ where: { token_string } })
+  }
+
+  resendFamilyLink = async (family_user_id: string) => {
+    const pendingLink = await prisma.familyResidentLink.findFirst({
+      where: { family_user_id, status: FamilyLinkStatus.pending },
+      orderBy: { created_at: 'desc' }
+    })
+    const familyUser = await prisma.user.findUnique({ where: { user_id: family_user_id } })
+
+    if (!familyUser) return // đã sử lý ở access_token middleware
+    if (!pendingLink)
+      throw new ErrorWithStatus({ message: 'You are not linked to any resident', status: HTTP_STATUS.NOT_FOUND })
+
+    const token = await this.generateAndSaveToken({
+      user_id: family_user_id,
+      token_type: TokenType.FamilyLinkToken as $Enums.TokenType,
+      role: familyUser.role,
+      status: familyUser.status,
+      institution_id: familyUser.institution_id
+    })
+
+    // TODO: tích hợp dịch vụ email, tạm thời log link
+    const baseUrl = env.APP_URL || 'http://localhost:3000'
+    const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+    console.log('Family link URL:', link)
   }
 }
 

@@ -51,6 +51,12 @@ class ResidentService {
         status: FamilyLinkStatus.pending
       }
     })
+    await prisma.user.update({
+      where: { user_id: familyUser.user_id },
+      data: {
+        institution_id: resident.institution_id
+      }
+    })
 
     // TODO: tích hợp dịch vụ email, tạm thời log link
     const baseUrl = env.APP_URL || 'http://localhost:3000'

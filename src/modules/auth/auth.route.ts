@@ -242,4 +242,7 @@ authRouter.post(
   wrapRequestHandler(authController.confirmFamilyLink)
 )
 
+// người dùng resend email
+authRouter.post('/family-link/resend', accessTokenValidator, wrapRequestHandler(authController.resendFamilyLink))
+
 export default authRouter
