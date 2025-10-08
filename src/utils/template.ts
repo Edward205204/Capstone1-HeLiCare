@@ -44,6 +44,7 @@ export const template = (token: string, token_type: $Enums.TokenType) => {
 
   return `
     <div style="font-family: Arial, sans-serif; color: #333;">
+      <p style="font-size:0.9em; color:#777;">Đây là email được gửi tự động, vui lòng không trả lời.</p>
       <h2>${title}</h2>
       <p>${message}</p>
       <a href="${link}" style="color:#1a73e8">${link}</a>

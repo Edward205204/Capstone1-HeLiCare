@@ -102,7 +102,8 @@ export const registerValidator = validate(
         ...isStrongPasswordSchema
       },
       confirm_password: confirmPasswordSchema,
-      role: userRoleSchema
+      role: userRoleSchema,
+      full_name: fullNameSchema
     },
     ['body']
   )

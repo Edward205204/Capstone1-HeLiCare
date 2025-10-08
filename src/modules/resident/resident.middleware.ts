@@ -3,6 +3,8 @@ import { commonService } from '~/common/common.service'
 import { validate } from '~/utils/validate'
 import { ErrorWithStatus } from '~/models/error'
 import { HTTP_STATUS } from '~/constants/http_status'
+import { NextFunction, Request, Response } from 'express'
+import { UserRole } from '@prisma/client'
 
 export const residentIdSchema = {
   notEmpty: {
@@ -37,3 +39,19 @@ export const residentIdValidator = validate(
     ['params']
   )
 )
+
+export const isHandleByStaffValidator = (req: Request, res: Response, next: NextFunction) => {
+  if (
+    req.decoded_authorization?.role !== UserRole.Staff &&
+    req.decoded_authorization?.role !== UserRole.RootAdmin &&
+    req.decoded_authorization?.role !== UserRole.Admin
+  ) {
+    return next(
+      new ErrorWithStatus({
+        message: 'You are not authorized to access this resource',
+        status: HTTP_STATUS.FORBIDDEN
+      })
+    )
+  }
+  next()
+}

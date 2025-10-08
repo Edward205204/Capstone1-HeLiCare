@@ -175,13 +175,17 @@ class AuthService {
       status,
       institution_id
     })
-    // TODO: sau này thêm mailgun send token vào email người dùng.
-    await transporter.sendMail({
-      from: `<${env.EMAIL_USER}>`,
-      to: email_to,
-      subject: subject,
-      html: template(token, token_type)
-    })
+
+    transporter
+      .sendMail({
+        from: `<${env.EMAIL_USER}>`,
+        to: email_to,
+        subject: subject,
+        html: template(token, token_type)
+      })
+      .catch((error) => {
+        console.log(error)
+      })
   }
 
   register = async (data: RegisterDto): Promise<{ access_token: string; refresh_token: string }> => {
@@ -193,6 +197,15 @@ class AuthService {
         role: data.role
       }
     })
+
+    if (data.role === UserRole.Family) {
+      await prisma.familyProfile.create({
+        data: {
+          user_id: user.user_id,
+          full_name: data.full_name
+        }
+      })
+    }
 
     await this.sendTokenToUserEmail({
       user_id: user.user_id,

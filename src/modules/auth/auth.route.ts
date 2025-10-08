@@ -37,7 +37,7 @@ authRouter.post('/login', loginValidator, wrapRequestHandler(authController.logi
  * @description Register for Family and Resident
  * @method POST
  * @path /auth/register
- * @body {email: string, password: string, confirm_password: string, role: string}
+ * @body {email: string, password: string, confirm_password: string, role: string, full_name: string}
  * @response {message: string, data: {access_token: string, refresh_token: string}}
  */
 authRouter.post('/register', registerValidator, wrapRequestHandler(authController.register))

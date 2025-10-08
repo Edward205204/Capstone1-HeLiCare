@@ -241,9 +241,8 @@ model FamilyProfile {
   profile_id String   @id @default(uuid())
   user_id    String   @unique
   full_name  String
-  phone      String
-  address    String
-  relation   String
+  phone      String?
+  address    String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -261,19 +260,6 @@ model UserToken {
   user User @relation(fields: [user_id], references: [user_id])
   @@index([user_id, token_type])
 }
-
-// model ResidentApplication {
-//   application_id    String   @id @default(uuid())
-//   family_user_id    String
-//   resident_name     String
-//   gender            Gender
-//   date_of_birth     DateTime
-//   preliminary_health Json
-//   preferences       Json
-//   created_at        DateTime @default(now())
-
-//   family_user User @relation(fields: [family_user_id], references: [user_id])
-// }
 
 model Resident {
   resident_id       String   @id @default(uuid())
@@ -327,4 +313,19 @@ model FamilyResidentLink {
   resident        Resident       @relation(fields: [resident_id], references: [resident_id])
 
   @@unique([family_user_id, resident_id])
+}
+
+enum ResidentApplicationStatus {
+  pending
+  approved
+  rejected
+}
+
+model ResidentApplication {
+  application_id String   @id @default(uuid())
+  family_user_id String? // null khi resident tự đăng ký
+  resident_id    String
+  status         ResidentApplicationStatus @default(pending)
+  notes          String?
+  created_at     DateTime @default(now())
 }
