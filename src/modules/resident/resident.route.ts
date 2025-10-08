@@ -3,7 +3,8 @@ import { accessTokenValidator } from '../auth/auth.middleware'
 
 import { wrapRequestHandler } from '~/utils/handler'
 import { residentController } from './resident.controller'
-import { isHandleByStaffValidator, residentIdValidator } from './resident.middleware'
+import { getApplicantValidator, residentIdValidator } from './resident.middleware'
+import { isHandleByStaffValidator } from '~/common/common.middleware'
 const residentRouter = Router()
 
 residentRouter.get(
@@ -26,6 +27,14 @@ residentRouter.get(
   accessTokenValidator,
   isHandleByStaffValidator,
   wrapRequestHandler(residentController.getApplicantByFamilyFullName)
+)
+
+residentRouter.get(
+  '/get-applicant',
+  accessTokenValidator,
+  isHandleByStaffValidator,
+  getApplicantValidator,
+  wrapRequestHandler(residentController.getApplicant)
 )
 
 residentRouter.post(

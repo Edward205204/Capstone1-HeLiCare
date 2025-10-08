@@ -17,16 +17,16 @@ class ResidentService {
     return residents
   }
 
-  getResidentById = async (resident_id: string) => {
+  getResidentById = async (resident_id: string, institution_id: string) => {
     const resident = await prisma.resident.findUnique({
-      where: { resident_id }
+      where: { resident_id, institution_id }
     })
     return resident
   }
 
-  getApplicantByFamilyFullName = async (full_name: string) => {
+  getApplicantByFamilyFullName = async (full_name: string, institution_id: string) => {
     const resident = await prisma.resident.findMany({
-      where: { full_name },
+      where: { full_name, institution_id },
       include: {
         user: {
           select: {
@@ -42,6 +42,18 @@ class ResidentService {
     return resident
   }
 
+  getApplicant = async ({ status, institution_id }: { status: string | undefined; institution_id: string }) => {
+    if (status === undefined) {
+      const resident = await prisma.residentApplication.findMany({ where: { institution_id } })
+      return resident
+    }
+    const resident = await prisma.residentApplication.findMany({
+      where: { status: status as ResidentApplicationStatus, institution_id }
+    })
+    return resident
+  }
+
+  // được thực hiện bởi nhân viên của viện
   createProfileForResident = async ({ body, institution_id }: { body: any; institution_id: string }) => {
     const { full_name, gender, date_of_birth, family_user_id } = body
     // family user id là id của bảng user
@@ -70,7 +82,8 @@ class ResidentService {
         data: {
           family_user_id,
           resident_id: resident.resident_id,
-          status: FamilyLinkStatus.pending
+          status: FamilyLinkStatus.pending,
+          institution_id: resident.institution_id
         }
       }),
       // temp: tạm thời update institution_id của family user, sẽ chuyển phần sử lý này khi người dùng chính thức đăng ký
@@ -86,7 +99,8 @@ class ResidentService {
         data: {
           family_user_id,
           resident_id: resident.resident_id,
-          status: ResidentApplicationStatus.pending
+          status: ResidentApplicationStatus.pending,
+          institution_id: resident.institution_id
         }
       })
     ])

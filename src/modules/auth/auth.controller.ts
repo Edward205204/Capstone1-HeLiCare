@@ -182,18 +182,18 @@ class AuthController {
   //   })
   // }
 
-  sendFamilyLink = async (req: Request, res: Response) => {
-    const { resident_id, family_email } = req.body
-    const sender = req.user as User
-    await this.authService.sendFamilyLink({
-      sender_user_id: sender.user_id,
-      resident_id,
-      family_email
-    })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Send family link successfully'
-    })
-  }
+  // sendFamilyLink = async (req: Request, res: Response) => {
+  //   const { resident_id, family_email } = req.body
+  //   const sender = req.user as User
+  //   await this.authService.sendFamilyLink({
+  //     sender_user_id: sender.user_id,
+  //     resident_id,
+  //     family_email
+  //   })
+  //   res.status(HTTP_STATUS.OK).json({
+  //     message: 'Send family link successfully'
+  //   })
+  // }
 
   validateFamilyLinkToken = async (req: Request, res: Response) => {
     const token_string = req.query.family_link_token as string

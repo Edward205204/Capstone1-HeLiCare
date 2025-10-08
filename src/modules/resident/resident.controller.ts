@@ -13,13 +13,22 @@ class ResidentController {
 
   getResidentById = async (req: Request, res: Response) => {
     const { resident_id } = req.params
-    const data = await this.residentService.getResidentById(resident_id)
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const data = await this.residentService.getResidentById(resident_id, institution_id)
     res.status(HTTP_STATUS.OK).json({ message: 'Resident fetched successfully', data })
   }
 
   getApplicantByFamilyFullName = async (req: Request, res: Response) => {
     const { full_name } = req.body
-    const data = await this.residentService.getApplicantByFamilyFullName(full_name)
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const data = await this.residentService.getApplicantByFamilyFullName(full_name, institution_id)
+    res.status(HTTP_STATUS.OK).json({ message: 'Resident fetched successfully', data })
+  }
+
+  getApplicant = async (req: Request, res: Response) => {
+    const { status } = req.query
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const data = await this.residentService.getApplicant({ status: status as string | undefined, institution_id })
     res.status(HTTP_STATUS.OK).json({ message: 'Resident fetched successfully', data })
   }
 

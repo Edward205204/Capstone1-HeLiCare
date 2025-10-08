@@ -1,14 +1,10 @@
 import { Router } from 'express'
 import { wrapRequestHandler } from '~/utils/handler'
 import { createInstitutionValidator } from './institution.middleware'
-import {
-  institutionIdValidator,
-  isHandleByInstitutionAdmin,
-  isHandleByRootFlatformAdmin,
-  updateInstitutionValidator
-} from './institution.middleware'
+import { institutionIdValidator, updateInstitutionValidator } from './institution.middleware'
 import { institutionController } from './institution.controller'
 import { accessTokenValidator } from '../auth/auth.middleware'
+import { isHandleByInstitutionAdmin, isHandleByRootFlatformAdmin } from '~/common/common.middleware'
 
 const institutionRouter = Router()
 

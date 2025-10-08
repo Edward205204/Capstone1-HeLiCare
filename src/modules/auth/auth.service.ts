@@ -433,45 +433,45 @@ class AuthService {
     })
   }
 
-  sendFamilyLink = async ({
-    sender_user_id,
-    resident_id,
-    family_email
-  }: {
-    sender_user_id: string
-    resident_id: string
-    family_email: string
-  }) => {
-    const [sender, resident, familyUser] = await Promise.all([
-      prisma.user.findUnique({ where: { user_id: sender_user_id } }),
-      prisma.resident.findUnique({ where: { resident_id } }),
-      prisma.user.findUnique({ where: { email: family_email } })
-    ])
+  // sendFamilyLink = async ({
+  //   sender_user_id,
+  //   resident_id,
+  //   family_email
+  // }: {
+  //   sender_user_id: string
+  //   resident_id: string
+  //   family_email: string
+  // }) => {
+  //   const [sender, resident, familyUser] = await Promise.all([
+  //     prisma.user.findUnique({ where: { user_id: sender_user_id } }),
+  //     prisma.resident.findUnique({ where: { resident_id } }),
+  //     prisma.user.findUnique({ where: { email: family_email } })
+  //   ])
 
-    if (!sender || !resident || !familyUser) return
+  //   if (!sender || !resident || !familyUser) return
 
-    // tạo token và gửi email
-    await this.sendTokenToUserEmail({
-      user_id: familyUser.user_id,
-      token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
-      role: familyUser.role,
-      status: familyUser.status,
-      institution_id: resident.institution_id,
-      email_to: familyUser.email,
-      subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với ${resident.full_name}`
-    })
+  //   // tạo token và gửi email
+  //   await this.sendTokenToUserEmail({
+  //     user_id: familyUser.user_id,
+  //     token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
+  //     role: familyUser.role,
+  //     status: familyUser.status,
+  //     institution_id: resident.institution_id,
+  //     email_to: familyUser.email,
+  //     subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với ${resident.full_name}`
+  //   })
 
-    await prisma.familyResidentLink.upsert({
-      where: { family_user_id_resident_id: { family_user_id: familyUser.user_id, resident_id } },
-      update: { status: 'pending' },
-      create: { family_user_id: familyUser.user_id, resident_id, status: 'pending' }
-    })
+  //   await prisma.familyResidentLink.upsert({
+  //     where: { family_user_id_resident_id: { family_user_id: familyUser.user_id, resident_id } },
+  //     update: { status: 'pending' },
+  //     create: { family_user_id: familyUser.user_id, resident_id, status: 'pending' }
+  //   })
 
-    // TODO: tích hợp dịch vụ email, tạm thời log link
-    // const baseUrl = env.APP_URL || 'http://localhost:3000'
-    // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-    // console.log('Family link URL:', link)
-  }
+  //   // TODO: tích hợp dịch vụ email, tạm thời log link
+  //   // const baseUrl = env.APP_URL || 'http://localhost:3000'
+  //   // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+  //   // console.log('Family link URL:', link)
+  // }
 
   validateFamilyLinkToken = async (token_string: string) => {
     const decoded = await this.decodeCommonToken(token_string)
