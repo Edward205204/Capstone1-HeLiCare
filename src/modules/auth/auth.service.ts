@@ -14,6 +14,8 @@ import { prisma } from '~/utils/db'
 import { env } from '~/utils/dot.env'
 import { hashPassword } from '~/utils/hash'
 import { signToken, verifyToken } from '~/utils/jwt'
+import { template } from '~/utils/template'
+import { transporter } from '~/utils/transporter'
 
 class AuthService {
   constructor() {}
@@ -154,13 +156,17 @@ class AuthService {
     token_type,
     role,
     status,
-    institution_id
+    institution_id,
+    email_to,
+    subject
   }: {
     user_id: string
     token_type: $Enums.TokenType
     role: UserRole
     status: UserStatus
     institution_id: string | null
+    email_to: string
+    subject: string
   }) => {
     const token = await this.generateAndSaveToken({
       user_id,
@@ -170,7 +176,12 @@ class AuthService {
       institution_id
     })
     // TODO: sau này thêm mailgun send token vào email người dùng.
-    console.log(token)
+    await transporter.sendMail({
+      from: `<${env.EMAIL_USER}>`,
+      to: email_to,
+      subject: subject,
+      html: template(token, token_type)
+    })
   }
 
   register = async (data: RegisterDto): Promise<{ access_token: string; refresh_token: string }> => {
@@ -188,7 +199,9 @@ class AuthService {
       token_type: TokenType.EmailVerifyToken,
       role: data.role,
       status: UserStatus.inactive,
-      institution_id: null
+      institution_id: null,
+      email_to: user.email,
+      subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
     })
 
     const { access_token, refresh_token } = await this.login({
@@ -210,7 +223,9 @@ class AuthService {
       token_type: TokenType.EmailVerifyToken,
       role: user.role,
       status: UserStatus.inactive,
-      institution_id: user.institution_id
+      institution_id: user.institution_id,
+      email_to: user.email,
+      subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
     })
   }
 
@@ -226,7 +241,9 @@ class AuthService {
       token_type: TokenType.ForgotPasswordToken,
       role: user.role,
       status: user.status,
-      institution_id: user.institution_id
+      institution_id: user.institution_id,
+      email_to: user.email,
+      subject: `Xác thực tài khoản của bạn để hoàn tất quá trình đặt lại mật khẩu`
     })
   }
 
@@ -317,11 +334,13 @@ class AuthService {
       token_type: TokenType.StaffInviteToken,
       role: UserRole.Staff,
       status: UserStatus.inactive,
-      institution_id: data.institution_id
+      institution_id: data.institution_id,
+      email_to: user.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
-  renewInviteToken = async (user: User) => {
+  renewInviteTokenForAllMemberOfInstitution = async (user: User) => {
     let token_type: $Enums.TokenType | undefined
     if (user.role === UserRole.RootAdmin || user.role === UserRole.Admin) {
       token_type = TokenType.AdminInviteToken
@@ -336,7 +355,9 @@ class AuthService {
       token_type: token_type,
       role: user.role,
       status: UserStatus.inactive,
-      institution_id: user.institution_id
+      institution_id: user.institution_id,
+      email_to: user.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
@@ -375,7 +396,9 @@ class AuthService {
       token_type: TokenType.AdminInviteToken,
       role: UserRole.RootAdmin,
       status: UserStatus.inactive,
-      institution_id: institution_id
+      institution_id: institution_id,
+      email_to: email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
@@ -391,7 +414,9 @@ class AuthService {
       token_type: TokenType.AdminInviteToken,
       role: UserRole.Admin,
       status: UserStatus.inactive,
-      institution_id: institution_id
+      institution_id: institution_id,
+      email_to: email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
@@ -418,7 +443,9 @@ class AuthService {
       token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
       role: familyUser.role,
       status: familyUser.status,
-      institution_id: resident.institution_id
+      institution_id: resident.institution_id,
+      email_to: familyUser.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với ${resident.full_name}`
     })
 
     await prisma.familyResidentLink.upsert({
@@ -488,7 +515,9 @@ class AuthService {
       token_type: TokenType.FamilyLinkToken as $Enums.TokenType,
       role: familyUser.role,
       status: familyUser.status,
-      institution_id: familyUser.institution_id
+      institution_id: familyUser.institution_id,
+      email_to: familyUser.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với người thân`
     })
 
     // TODO: tích hợp dịch vụ email, tạm thời log link

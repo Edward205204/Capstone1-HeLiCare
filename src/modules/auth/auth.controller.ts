@@ -143,9 +143,9 @@ class AuthController {
     })
   }
 
-  renewToken = async (req: Request, res: Response) => {
+  renewInviteTokenForAllMemberOfInstitution = async (req: Request, res: Response) => {
     const user = req.user as User
-    await this.authService.renewInviteToken(user)
+    await this.authService.renewInviteTokenForAllMemberOfInstitution(user)
     res.status(HTTP_STATUS.OK).json({
       message: 'Renew token successfully'
     })
