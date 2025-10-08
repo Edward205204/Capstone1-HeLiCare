@@ -169,13 +169,17 @@ authRouter.post(
 )
 
 /**
- * @description Renew invite token
+ * @description Renew invite token for all member of institution
  * @method POST
  * @path /auth/renew-invite-token
  * @body {email: string}
  * @response {message: string}
  */
-authRouter.post('/renew-invite-token', renewInviteTokenValidator, wrapRequestHandler(authController.renewToken))
+authRouter.post(
+  '/renew-invite-token',
+  renewInviteTokenValidator,
+  wrapRequestHandler(authController.renewInviteTokenForAllMemberOfInstitution)
+)
 
 /**
  * @description Create admin by root admin
@@ -241,5 +245,8 @@ authRouter.post(
   confirmFamilyLinkValidator,
   wrapRequestHandler(authController.confirmFamilyLink)
 )
+
+// người dùng resend email
+authRouter.post('/family-link/resend', accessTokenValidator, wrapRequestHandler(authController.resendFamilyLink))
 
 export default authRouter
