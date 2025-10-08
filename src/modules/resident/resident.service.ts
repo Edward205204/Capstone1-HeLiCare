@@ -4,6 +4,8 @@ import { ErrorWithStatus } from '~/models/error'
 import { prisma } from '~/utils/db'
 import { AuthService, authService as authServiceInstance } from '../auth/auth.service'
 import { env } from '~/utils/dot.env'
+import { transporter } from '~/utils/transporter'
+import { template } from '~/utils/template'
 
 class ResidentService {
   constructor(private readonly authService: AuthService = authServiceInstance) {}
@@ -58,10 +60,14 @@ class ResidentService {
       }
     })
 
-    // TODO: tích hợp dịch vụ email, tạm thời log link
-    const baseUrl = env.APP_URL || 'http://localhost:3000'
-    const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-    console.log('Family link URL:', link)
+    const link = `${env.CLIENT_URL}/verify-family-link?token=${encodeURIComponent(token)}`
+    const subject = `Vui lòng nhấn vào đường link bên dưới để kết nối với ${resident.full_name}`
+    transporter.sendMail({
+      from: `<${env.EMAIL_USER}>`,
+      to: familyUser.email,
+      subject: subject,
+      html: template(link, TokenType.FamilyLinkToken)
+    })
   }
 }
 
