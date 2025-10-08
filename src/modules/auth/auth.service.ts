@@ -412,7 +412,8 @@ class AuthService {
 
     if (!sender || !resident || !familyUser) return
 
-    const token = await this.generateAndSaveToken({
+    // tạo token và gửi email
+    await this.sendTokenToUserEmail({
       user_id: familyUser.user_id,
       token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
       role: familyUser.role,
@@ -420,7 +421,6 @@ class AuthService {
       institution_id: resident.institution_id
     })
 
-    // Lưu trạng thái pending của mối liên kết
     await prisma.familyResidentLink.upsert({
       where: { family_user_id_resident_id: { family_user_id: familyUser.user_id, resident_id } },
       update: { status: 'pending' },
@@ -428,9 +428,9 @@ class AuthService {
     })
 
     // TODO: tích hợp dịch vụ email, tạm thời log link
-    const baseUrl = env.APP_URL || 'http://localhost:3000'
-    const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-    console.log('Family link URL:', link)
+    // const baseUrl = env.APP_URL || 'http://localhost:3000'
+    // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+    // console.log('Family link URL:', link)
   }
 
   validateFamilyLinkToken = async (token_string: string) => {
@@ -482,7 +482,8 @@ class AuthService {
     if (!pendingLink)
       throw new ErrorWithStatus({ message: 'You are not linked to any resident', status: HTTP_STATUS.NOT_FOUND })
 
-    const token = await this.generateAndSaveToken({
+    // tạo token và gửi email
+    await this.sendTokenToUserEmail({
       user_id: family_user_id,
       token_type: TokenType.FamilyLinkToken as $Enums.TokenType,
       role: familyUser.role,
@@ -491,9 +492,9 @@ class AuthService {
     })
 
     // TODO: tích hợp dịch vụ email, tạm thời log link
-    const baseUrl = env.APP_URL || 'http://localhost:3000'
-    const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-    console.log('Family link URL:', link)
+    // const baseUrl = env.APP_URL || 'http://localhost:3000'
+    // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+    // console.log('Family link URL:', link)
   }
 }
 
