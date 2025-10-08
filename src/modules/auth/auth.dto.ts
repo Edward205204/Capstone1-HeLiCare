@@ -43,6 +43,7 @@ export interface FamilyLinkTokenPayload extends TokenPayload {
 
 export interface RegisterDto {
   email: string
+  full_name: string
   password: string
   confirm_password: string
   role: UserRole

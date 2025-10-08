@@ -1,6 +1,8 @@
-import { $Enums, User, UserRole, UserStatus } from '@prisma/client'
+import { $Enums, FamilyLinkStatus, User, UserRole, UserStatus } from '@prisma/client'
 import { randomBytes } from 'crypto'
+import { HTTP_STATUS } from '~/constants/http_status'
 import { TokenType } from '~/constants/token_type'
+import { ErrorWithStatus } from '~/models/error'
 import {
   AccessTokenPayload,
   CreateStaffForInstitutionDto,
@@ -12,6 +14,8 @@ import { prisma } from '~/utils/db'
 import { env } from '~/utils/dot.env'
 import { hashPassword } from '~/utils/hash'
 import { signToken, verifyToken } from '~/utils/jwt'
+import { template } from '~/utils/template'
+import { transporter } from '~/utils/transporter'
 
 class AuthService {
   constructor() {}
@@ -152,13 +156,17 @@ class AuthService {
     token_type,
     role,
     status,
-    institution_id
+    institution_id,
+    email_to,
+    subject
   }: {
     user_id: string
     token_type: $Enums.TokenType
     role: UserRole
     status: UserStatus
     institution_id: string | null
+    email_to: string
+    subject: string
   }) => {
     const token = await this.generateAndSaveToken({
       user_id,
@@ -167,8 +175,17 @@ class AuthService {
       status,
       institution_id
     })
-    // TODO: sau này thêm mailgun send token vào email người dùng.
-    console.log(token)
+
+    transporter
+      .sendMail({
+        from: `<${env.EMAIL_USER}>`,
+        to: email_to,
+        subject: subject,
+        html: template(token, token_type)
+      })
+      .catch((error) => {
+        console.log(error)
+      })
   }
 
   register = async (data: RegisterDto): Promise<{ access_token: string; refresh_token: string }> => {
@@ -181,12 +198,23 @@ class AuthService {
       }
     })
 
+    if (data.role === UserRole.Family) {
+      await prisma.familyProfile.create({
+        data: {
+          user_id: user.user_id,
+          full_name: data.full_name
+        }
+      })
+    }
+
     await this.sendTokenToUserEmail({
       user_id: user.user_id,
       token_type: TokenType.EmailVerifyToken,
       role: data.role,
       status: UserStatus.inactive,
-      institution_id: null
+      institution_id: null,
+      email_to: user.email,
+      subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
     })
 
     const { access_token, refresh_token } = await this.login({
@@ -208,7 +236,9 @@ class AuthService {
       token_type: TokenType.EmailVerifyToken,
       role: user.role,
       status: UserStatus.inactive,
-      institution_id: user.institution_id
+      institution_id: user.institution_id,
+      email_to: user.email,
+      subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
     })
   }
 
@@ -224,7 +254,9 @@ class AuthService {
       token_type: TokenType.ForgotPasswordToken,
       role: user.role,
       status: user.status,
-      institution_id: user.institution_id
+      institution_id: user.institution_id,
+      email_to: user.email,
+      subject: `Xác thực tài khoản của bạn để hoàn tất quá trình đặt lại mật khẩu`
     })
   }
 
@@ -315,11 +347,13 @@ class AuthService {
       token_type: TokenType.StaffInviteToken,
       role: UserRole.Staff,
       status: UserStatus.inactive,
-      institution_id: data.institution_id
+      institution_id: data.institution_id,
+      email_to: user.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
-  renewInviteToken = async (user: User) => {
+  renewInviteTokenForAllMemberOfInstitution = async (user: User) => {
     let token_type: $Enums.TokenType | undefined
     if (user.role === UserRole.RootAdmin || user.role === UserRole.Admin) {
       token_type = TokenType.AdminInviteToken
@@ -334,7 +368,9 @@ class AuthService {
       token_type: token_type,
       role: user.role,
       status: UserStatus.inactive,
-      institution_id: user.institution_id
+      institution_id: user.institution_id,
+      email_to: user.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
@@ -373,7 +409,9 @@ class AuthService {
       token_type: TokenType.AdminInviteToken,
       role: UserRole.RootAdmin,
       status: UserStatus.inactive,
-      institution_id: institution_id
+      institution_id: institution_id,
+      email_to: email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
@@ -389,7 +427,9 @@ class AuthService {
       token_type: TokenType.AdminInviteToken,
       role: UserRole.Admin,
       status: UserStatus.inactive,
-      institution_id: institution_id
+      institution_id: institution_id,
+      email_to: email,
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
 
@@ -410,15 +450,17 @@ class AuthService {
 
     if (!sender || !resident || !familyUser) return
 
-    const token = await this.generateAndSaveToken({
+    // tạo token và gửi email
+    await this.sendTokenToUserEmail({
       user_id: familyUser.user_id,
       token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
       role: familyUser.role,
       status: familyUser.status,
-      institution_id: resident.institution_id
+      institution_id: resident.institution_id,
+      email_to: familyUser.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với ${resident.full_name}`
     })
 
-    // Lưu trạng thái pending của mối liên kết
     await prisma.familyResidentLink.upsert({
       where: { family_user_id_resident_id: { family_user_id: familyUser.user_id, resident_id } },
       update: { status: 'pending' },
@@ -426,32 +468,35 @@ class AuthService {
     })
 
     // TODO: tích hợp dịch vụ email, tạm thời log link
-    const baseUrl = env.APP_URL || 'http://localhost:3000'
-    const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-    console.log('Family link URL:', link)
+    // const baseUrl = env.APP_URL || 'http://localhost:3000'
+    // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+    // console.log('Family link URL:', link)
   }
 
   validateFamilyLinkToken = async (token_string: string) => {
     const decoded = await this.decodeCommonToken(token_string)
     const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
     if (!userToken || decoded.token_type !== TokenType.FamilyLinkToken) {
-      throw new Error('Invalid family link token')
+      throw new ErrorWithStatus({
+        message: 'Invalid family link token',
+        status: HTTP_STATUS.NOT_FOUND
+      })
     }
     return decoded
   }
 
   confirmFamilyLink = async (token_string: string) => {
     const decoded = await this.decodeCommonToken(token_string)
-    if (decoded.token_type !== TokenType.FamilyLinkToken) {
-      throw new Error('Invalid family link token')
+    if (!decoded || decoded.token_type !== TokenType.FamilyLinkToken) {
+      throw new ErrorWithStatus({ message: 'Invalid family link token', status: HTTP_STATUS.BAD_REQUEST })
     }
     const family_user_id = decoded.user_id as string
     const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
-    if (!userToken) throw new Error('Family link token not found')
+    if (!userToken) throw new ErrorWithStatus({ message: 'Family link token not found', status: HTTP_STATUS.NOT_FOUND })
 
     // Tìm resident từ institution_id trong token qua record pending gần nhất
     const pendingLink = await prisma.familyResidentLink.findFirst({
-      where: { family_user_id, status: 'pending' },
+      where: { family_user_id, status: FamilyLinkStatus.pending },
       orderBy: { created_at: 'desc' }
     })
     if (!pendingLink) throw new Error('No pending link found')
@@ -459,11 +504,39 @@ class AuthService {
     // Kích hoạt liên kết
     await prisma.familyResidentLink.update({
       where: { link_id: pendingLink.link_id },
-      data: { status: 'active' }
+      data: { status: FamilyLinkStatus.active }
     })
 
     // Xoá token sau khi dùng
     await prisma.userToken.delete({ where: { token_string } })
+  }
+
+  resendFamilyLink = async (family_user_id: string) => {
+    const pendingLink = await prisma.familyResidentLink.findFirst({
+      where: { family_user_id, status: FamilyLinkStatus.pending },
+      orderBy: { created_at: 'desc' }
+    })
+    const familyUser = await prisma.user.findUnique({ where: { user_id: family_user_id } })
+
+    if (!familyUser) return // đã sử lý ở access_token middleware
+    if (!pendingLink)
+      throw new ErrorWithStatus({ message: 'You are not linked to any resident', status: HTTP_STATUS.NOT_FOUND })
+
+    // tạo token và gửi email
+    await this.sendTokenToUserEmail({
+      user_id: family_user_id,
+      token_type: TokenType.FamilyLinkToken as $Enums.TokenType,
+      role: familyUser.role,
+      status: familyUser.status,
+      institution_id: familyUser.institution_id,
+      email_to: familyUser.email,
+      subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với người thân`
+    })
+
+    // TODO: tích hợp dịch vụ email, tạm thời log link
+    // const baseUrl = env.APP_URL || 'http://localhost:3000'
+    // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
+    // console.log('Family link URL:', link)
   }
 }
 

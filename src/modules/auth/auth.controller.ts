@@ -143,9 +143,9 @@ class AuthController {
     })
   }
 
-  renewToken = async (req: Request, res: Response) => {
+  renewInviteTokenForAllMemberOfInstitution = async (req: Request, res: Response) => {
     const user = req.user as User
-    await this.authService.renewInviteToken(user)
+    await this.authService.renewInviteTokenForAllMemberOfInstitution(user)
     res.status(HTTP_STATUS.OK).json({
       message: 'Renew token successfully'
     })
@@ -169,18 +169,18 @@ class AuthController {
     })
   }
 
-  connectResidentWithFamily = async (req: Request, res: Response) => {
-    const { resident_id, family_email } = req.body
-    const sender = req.user as User
-    await this.authService.sendFamilyLink({
-      sender_user_id: sender.user_id,
-      resident_id,
-      family_email
-    })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Send family link successfully'
-    })
-  }
+  // connectResidentWithFamily = async (req: Request, res: Response) => {
+  //   const { resident_id, family_email } = req.body
+  //   const sender = req.user as User
+  //   await this.authService.sendFamilyLink({
+  //     sender_user_id: sender.user_id,
+  //     resident_id,
+  //     family_email
+  //   })
+  //   res.status(HTTP_STATUS.OK).json({
+  //     message: 'Send family link successfully'
+  //   })
+  // }
 
   sendFamilyLink = async (req: Request, res: Response) => {
     const { resident_id, family_email } = req.body
@@ -209,6 +209,14 @@ class AuthController {
     await this.authService.confirmFamilyLink(token_string)
     res.status(HTTP_STATUS.OK).json({
       message: 'Confirm family link successfully'
+    })
+  }
+
+  resendFamilyLink = async (req: Request, res: Response) => {
+    const family_user_id = req.decoded_authorization?.user_id as string
+    await this.authService.resendFamilyLink(family_user_id)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Resend family link successfully'
     })
   }
 }

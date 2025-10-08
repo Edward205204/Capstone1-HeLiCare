@@ -64,12 +64,20 @@ institutionRouter.patch(
 
 // update by institution admin
 institutionRouter.patch(
-  '/update-institution-by-institution-admin/:institution_id',
+  '/update-institution-by-institution-admin',
   accessTokenValidator,
   isHandleByInstitutionAdmin,
-  institutionIdValidator,
   updateInstitutionValidator,
-  wrapRequestHandler(institutionController.updateInstitution)
+  wrapRequestHandler(institutionController.updateInstitutionByInstitutionAdmin)
+)
+
+// delete by root flatform admin
+institutionRouter.delete(
+  '/delete-institution-by-root-flatform-admin/:institution_id',
+  accessTokenValidator,
+  isHandleByRootFlatformAdmin,
+  institutionIdValidator,
+  wrapRequestHandler(institutionController.deleteInstitution)
 )
 
 export default institutionRouter

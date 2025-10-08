@@ -177,14 +177,24 @@ enum UserStatus {
   inactive
 }
 
+enum InstitutionContractStatus {
+  active
+  cancelled
+}
+
+enum Gender {
+  male
+  female
+}
 
 model Institution {
   institution_id String   @id @default(uuid())
   name           String
-  address        Json     @default("{}")
+  address        Json    
   contact_info   Json   
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
+  status         InstitutionContractStatus @default(active)
 
   users     User[]
   rooms     Room[]
@@ -205,7 +215,7 @@ model User {
   institution              Institution?       @relation(fields: [institution_id], references: [institution_id])
   familyProfile            FamilyProfile?
   userTokens               UserToken[]
-  residentApplication      ResidentApplication[]
+  // residentApplication      ResidentApplication[]
   assignedResidents        Resident[] @relation("AssignedStaff")
   resident                 Resident? @relation("ResidentUser")
   staffProfile             StaffProfile?
@@ -231,9 +241,8 @@ model FamilyProfile {
   profile_id String   @id @default(uuid())
   user_id    String   @unique
   full_name  String
-  phone      String
-  address    String
-  relation   String
+  phone      String?
+  address    String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -252,29 +261,19 @@ model UserToken {
   @@index([user_id, token_type])
 }
 
-model ResidentApplication {
-  application_id    String   @id @default(uuid())
-  family_user_id    String
-  resident_name     String
-  date_of_birth     DateTime
-  preliminary_health Json
-  preferences       Json
-  created_at        DateTime @default(now())
-
-  family_user User @relation(fields: [family_user_id], references: [user_id])
-}
-
 model Resident {
   resident_id       String   @id @default(uuid())
   user_id           String?  @unique   
   institution_id    String
   room_id           String?
-  name              String
+  full_name         String
+  gender            Gender
   date_of_birth     DateTime
-  cognitive_status  CognitiveStatus
-  mobility_status   MobilityStatus
-  chronic_diseases  Json
-  allergies         Json
+  cognitive_status  CognitiveStatus?
+  mobility_status   MobilityStatus?
+  chronic_diseases  Json?
+  allergies         Json?
+  
   notes             String?
   assigned_staff_id String?
   admission_date    DateTime
@@ -314,4 +313,19 @@ model FamilyResidentLink {
   resident        Resident       @relation(fields: [resident_id], references: [resident_id])
 
   @@unique([family_user_id, resident_id])
+}
+
+enum ResidentApplicationStatus {
+  pending
+  approved
+  rejected
+}
+
+model ResidentApplication {
+  application_id String   @id @default(uuid())
+  family_user_id String? // null khi resident tự đăng ký
+  resident_id    String
+  status         ResidentApplicationStatus @default(pending)
+  notes          String?
+  created_at     DateTime @default(now())
 }

@@ -2,7 +2,7 @@ import { checkSchema } from 'express-validator'
 import { validate } from '~/utils/validate'
 import { verifyPassword } from '~/utils/hash'
 import { commonService } from '~/common/common.service'
-import { UserRole } from '@prisma/client'
+import { InstitutionContractStatus, UserRole } from '@prisma/client'
 import { ErrorWithStatus } from '~/models/error'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { accessTokenDecode } from '~/utils/access_token_decode'
@@ -102,7 +102,8 @@ export const registerValidator = validate(
         ...isStrongPasswordSchema
       },
       confirm_password: confirmPasswordSchema,
-      role: userRoleSchema
+      role: userRoleSchema,
+      full_name: fullNameSchema
     },
     ['body']
   )
@@ -348,6 +349,12 @@ export const createStaffForInstitutionValidator = validate(
                 status: HTTP_STATUS.NOT_FOUND
               })
             }
+            if (institution.status !== InstitutionContractStatus.active) {
+              throw new ErrorWithStatus({
+                message: 'Institution is not found',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
             return true
           }
         }
@@ -460,6 +467,12 @@ export const createRootAdminValidator = validate(
                 status: HTTP_STATUS.NOT_FOUND
               })
             }
+            if (institution.status !== InstitutionContractStatus.active) {
+              throw new ErrorWithStatus({
+                message: 'Institution is not found',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
             return true
           }
         }
@@ -499,6 +512,12 @@ export const createAdminValidator = validate(
             if (!institution) {
               throw new ErrorWithStatus({
                 message: 'Institution not found',
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            if (institution.status !== InstitutionContractStatus.active) {
+              throw new ErrorWithStatus({
+                message: 'Institution is not found',
                 status: HTTP_STATUS.NOT_FOUND
               })
             }

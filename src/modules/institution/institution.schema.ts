@@ -1,6 +1,5 @@
 import { ParamSchema } from 'express-validator'
 import AddressJson from '~/constants/address_json'
-import { ContactJson } from '~/constants/contact_json'
 
 export const institutionNameSchema: ParamSchema = {
   notEmpty: {
@@ -16,17 +15,15 @@ export const institutionAddressSchema: ParamSchema = {
   notEmpty: {
     errorMessage: 'Address is required'
   },
-  isJSON: {
-    errorMessage: 'Address must be a JSON object'
-  },
   custom: {
     options: (value) => {
       try {
-        const obj = JSON.parse(value)
-
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+          throw new Error('Address must be a JSON object')
+        }
         const keys: (keyof AddressJson)[] = ['province', 'district', 'ward', 'street', 'house_number']
         for (const key of keys) {
-          if (typeof obj[key] !== 'string' || obj[key].trim() === '') {
+          if (typeof value[key] !== 'string' || value[key].trim() === '') {
             throw new Error(`Invalid or missing field: ${key}`)
           }
         }
@@ -35,9 +32,7 @@ export const institutionAddressSchema: ParamSchema = {
         throw new Error(err.message || 'Invalid address JSON')
       }
     }
-  },
-
-  trim: true
+  }
 }
 
 export const institutionContactInfoCreateSchema: ParamSchema = {
@@ -85,8 +80,7 @@ export const institutionContactInfoPatchSchema: ParamSchema = {
       }
       return true
     }
-  },
-  trim: true
+  }
 }
 
 export const institutionIdSchema: ParamSchema = {
