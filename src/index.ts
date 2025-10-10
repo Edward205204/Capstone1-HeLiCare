@@ -5,6 +5,7 @@ import { createServer } from 'http'
 import cors from 'cors'
 import institutionRouter from './modules/institution/institution.route'
 import { env } from './utils/dot.env'
+import roomRouter from './modules/room/room.route'
 
 const app = express()
 const httpServer = createServer(app)
@@ -13,6 +14,7 @@ app.use(cors())
 app.use(express.json())
 app.use('/auth', authRouter)
 app.use('/institution', institutionRouter)
+app.use('/institutions', roomRouter)
 
 app.use(defaultErrorHandler)
 httpServer.listen(PORT, () => {
