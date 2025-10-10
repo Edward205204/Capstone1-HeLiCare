@@ -13,8 +13,7 @@ class ResidentController {
 
   getResidentById = async (req: Request, res: Response) => {
     const { resident_id } = req.params
-    const institution_id = req.decoded_authorization?.institution_id as string
-    const data = await this.residentService.getResidentById(resident_id, institution_id)
+    const data = await this.residentService.getResidentById(resident_id)
     res.status(HTTP_STATUS.OK).json({ message: 'Resident fetched successfully', data })
   }
 

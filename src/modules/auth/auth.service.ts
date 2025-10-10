@@ -188,7 +188,7 @@ class AuthService {
       })
   }
 
-  register = async (data: RegisterDto): Promise<{ access_token: string; refresh_token: string }> => {
+  register = async (data: RegisterDto) => {
     const { password } = await hashPassword(data.password)
     const user = await prisma.user.create({
       data: {
@@ -216,21 +216,13 @@ class AuthService {
       email_to: user.email,
       subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
     })
-
-    const { access_token, refresh_token } = await this.login({
-      role: data.role,
-      institution_id: null,
-      user_id: user.user_id,
-      status: UserStatus.inactive
-    })
-
-    return {
-      access_token,
-      refresh_token
-    }
   }
 
-  resendEmailVerify = async (user: User) => {
+  resendEmailVerify = async (email: string) => {
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user) {
+      throw new ErrorWithStatus({ message: 'User not found', status: HTTP_STATUS.NOT_FOUND })
+    }
     this.sendTokenToUserEmail({
       user_id: user.user_id,
       token_type: TokenType.EmailVerifyToken,

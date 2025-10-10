@@ -16,12 +16,11 @@ import {
   verifyRootAdminInviteTokenValidator,
   verifyStaffInviteTokenValidator,
   verifyAdminInviteTokenValidator,
-  sendFamilyLinkValidator,
   validateFamilyLinkTokenValidator,
-  confirmFamilyLinkValidator
+  confirmFamilyLinkValidator,
+  resendEmailVerifyValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
-import { isHandleByInstitutionAdmin } from '~/common/common.middleware'
 
 const authRouter = Router()
 /**
@@ -49,7 +48,12 @@ authRouter.post('/register', registerValidator, wrapRequestHandler(authControlle
  * @path /auth/resend-email-verify
  * @response {message: string}
  */
-authRouter.post('/resend-email-verify', accessTokenValidator, wrapRequestHandler(authController.resendEmailVerify))
+
+authRouter.post(
+  '/resend-email-verify',
+  resendEmailVerifyValidator,
+  wrapRequestHandler(authController.resendEmailVerify)
+)
 
 authRouter.post(
   '/verify-email',

@@ -20,6 +20,97 @@ datasource db {
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
+// enum CareLogType {
+//   meal
+//   exercise
+//   hygiene
+//   medication
+//   custom
+// }
+
+// enum CareTaskStatus {
+//   pending
+//   in_progress
+//   completed
+// }
+
+// enum MedicationStatus {
+//   scheduled
+//   administered
+//   skipped
+// }
+
+// enum AlertType {
+//   SOS
+//   HealthAnomaly
+//   OverduePayment
+//   LowStock
+//   FullRoom
+// }
+
+// enum NotificationType {
+//   Alert
+//   ServiceSuggestion
+//   PaymentReminder
+//   VisitReminder
+// }
+
+// enum ServiceType {
+//   base
+//   add_on
+//   special
+// }
+
+// enum ContractStatus {
+//   active
+//   expired
+//   cancelled
+// }
+
+// enum ContractServiceStatus {
+//   active
+//   expired
+//   cancelled
+// }
+
+// enum PaymentFrequency {
+//   monthly
+//   annually
+// }
+
+// enum PaymentStatus {
+//   paid
+//   overdue
+//   pending
+// }
+
+// enum SpecialCareStatus {
+//   suggested
+//   accepted
+//   declined
+//   active
+//   completed
+// }
+
+// enum ActivityStatus {
+//   planned
+//   participated
+//   did_not_participate
+// }
+
+// enum VisitStatus {
+//   pending
+//   approved
+//   rejected
+//   completed
+// }
+
+// enum InvitationStatus {
+//   sent
+//   accepted
+//   expired
+// }
+
 enum UserRole {
   PlatformSuperAdmin
   RootAdmin
@@ -53,68 +144,10 @@ enum MobilityStatus {
   DEPENDENT
 }
 
-enum MedicationStatus {
-  scheduled
-  administered
-  skipped
-}
-
-enum CareLogType {
-  meal
-  exercise
-  hygiene
-  medication
-  custom
-}
-
-enum CareTaskStatus {
-  pending
-  in_progress
-  completed
-}
-
-enum AlertType {
-  SOS
-  HealthAnomaly
-  OverduePayment
-  LowStock
-  FullRoom
-}
-
-enum NotificationType {
-  Alert
-  ServiceSuggestion
-  PaymentReminder
-  VisitReminder
-}
-
 enum RoomType {
   single
   double
   multi
-}
-
-enum ServiceType {
-  base
-  add_on
-  special
-}
-
-enum ContractStatus {
-  active
-  expired
-  cancelled
-}
-
-enum ContractServiceStatus {
-  active
-  expired
-  cancelled
-}
-
-enum PaymentFrequency {
-  monthly
-  annually
 }
 
 enum PaymentMethod {
@@ -123,43 +156,12 @@ enum PaymentMethod {
   paypal
 }
 
-enum PaymentStatus {
-  paid
-  overdue
-  pending
-}
 
-enum SpecialCareStatus {
-  suggested
-  accepted
-  declined
-  active
-  completed
-}
-
-enum ActivityStatus {
-  planned
-  participated
-  did_not_participate
-}
-
-enum VisitStatus {
-  pending
-  approved
-  rejected
-  completed
-}
 
 enum FamilyLinkStatus {
   pending
   active
   revoked
-}
-
-enum InvitationStatus {
-  sent
-  accepted
-  expired
 }
 
 enum TokenType {
@@ -188,10 +190,10 @@ enum Gender {
 }
 
 
-enum ResidentApplicationStatus {
-  pending
-  approved
-  rejected
+enum ResidentAssessmentStatus {
+  pending // chờ khám
+  done // khám xong
+  rejected // từ chối khám
 }
 
 enum DiseaseSeverity {
@@ -403,7 +405,7 @@ model ResidentApplication {
   family_user_id String? // null khi resident tự đăng ký
   resident_id    String
   institution_id String
-  status         ResidentApplicationStatus @default(pending)
+  status         ResidentAssessmentStatus @default(pending)
   notes          String?
   created_at     DateTime @default(now())
   institution    Institution    @relation(fields: [institution_id], references: [institution_id])

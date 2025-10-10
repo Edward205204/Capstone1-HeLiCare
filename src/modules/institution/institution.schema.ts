@@ -1,5 +1,5 @@
 import { ParamSchema } from 'express-validator'
-import AddressJson from '~/constants/address_json'
+import AddressJson from '~/models/address_json'
 
 export const institutionNameSchema: ParamSchema = {
   notEmpty: {

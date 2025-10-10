@@ -1,4 +1,4 @@
-import { $Enums, FamilyLinkStatus, ResidentApplicationStatus, TokenType, UserRole } from '@prisma/client'
+import { $Enums, FamilyLinkStatus, ResidentAssessmentStatus, TokenType, UserRole } from '@prisma/client'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { ErrorWithStatus } from '~/models/error'
 import { prisma } from '~/utils/db'
@@ -17,9 +17,17 @@ class ResidentService {
     return residents
   }
 
-  getResidentById = async (resident_id: string, institution_id: string) => {
+  getResidentById = async (resident_id: string) => {
     const resident = await prisma.resident.findUnique({
-      where: { resident_id, institution_id }
+      where: { resident_id },
+      include: {
+        familyResidentLinks: true,
+        healthAssessments: true,
+        chronicDiseases: true,
+        allergies: true,
+        room: true,
+        assigned_staff: true
+      }
     })
     return resident
   }
@@ -48,7 +56,7 @@ class ResidentService {
       return resident
     }
     const resident = await prisma.residentApplication.findMany({
-      where: { status: status as ResidentApplicationStatus, institution_id }
+      where: { status: status as ResidentAssessmentStatus, institution_id }
     })
     return resident
   }
@@ -77,8 +85,8 @@ class ResidentService {
       institution_id: resident.institution_id
     })
 
-    Promise.all([
-      await prisma.familyResidentLink.create({
+    await Promise.all([
+      prisma.familyResidentLink.create({
         data: {
           family_user_id,
           resident_id: resident.resident_id,
@@ -87,7 +95,7 @@ class ResidentService {
         }
       }),
       // temp: tạm thời update institution_id của family user, sẽ chuyển phần sử lý này khi người dùng chính thức đăng ký
-      await prisma.user.update({
+      prisma.user.update({
         where: { user_id: familyUser.user_id },
         data: {
           institution_id: resident.institution_id
@@ -95,11 +103,11 @@ class ResidentService {
       }),
       // temp: tạm thời update institution_id của family user, sẽ chuyển phần sử lý này khi người dùng chính thức đăng ký
 
-      await prisma.residentApplication.create({
+      prisma.residentApplication.create({
         data: {
           family_user_id,
           resident_id: resident.resident_id,
-          status: ResidentApplicationStatus.pending,
+          status: ResidentAssessmentStatus.pending,
           institution_id: resident.institution_id
         }
       })

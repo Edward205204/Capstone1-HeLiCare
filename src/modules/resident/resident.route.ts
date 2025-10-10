@@ -11,7 +11,7 @@ residentRouter.get(
   '/get-resident',
   accessTokenValidator,
   isHandleByStaffValidator,
-  wrapRequestHandler(wrapRequestHandler(residentController.getListResident))
+  wrapRequestHandler(residentController.getListResident)
 )
 
 residentRouter.get(
@@ -22,7 +22,8 @@ residentRouter.get(
   wrapRequestHandler(residentController.getResidentById)
 )
 
-residentRouter.get(
+// lấy applicant bằng full name của family
+residentRouter.post(
   '/get-applicant-by-family-full-name',
   accessTokenValidator,
   isHandleByStaffValidator,

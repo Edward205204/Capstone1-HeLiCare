@@ -27,15 +27,15 @@ class AuthController {
   }
 
   register = async (req: Request, res: Response) => {
-    const data = await this.authService.register(req.body as RegisterDto)
+    await this.authService.register(req.body as RegisterDto)
     res.status(HTTP_STATUS.OK).json({
-      message: 'Register successfully',
-      data
+      message: 'Register successfully'
     })
   }
 
   resendEmailVerify = async (req: Request, res: Response) => {
-    await this.authService.resendEmailVerify(req.user as User)
+    const email = req.body.email
+    await this.authService.resendEmailVerify(email)
     res.status(HTTP_STATUS.OK).json({
       message: 'Resend email verify successfully'
     })

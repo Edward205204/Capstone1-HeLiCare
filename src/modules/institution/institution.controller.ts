@@ -1,8 +1,8 @@
 import { Request, Response } from 'express'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { InstitutionService, institutionService as institutionServiceInstance } from './institution.service'
-import AddressJson from '~/constants/address_json'
-import { ContactJson } from '~/constants/contact_json'
+import AddressJson from '~/models/address_json'
+import { ContactJson } from '~/models/contact_json'
 import { InstitutionUpdateData } from './institution.dto'
 
 class InstitutionController {
