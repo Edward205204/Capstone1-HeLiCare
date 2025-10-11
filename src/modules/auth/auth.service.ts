@@ -524,11 +524,6 @@ class AuthService {
       email_to: familyUser.email,
       subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với người thân`
     })
-
-    // TODO: tích hợp dịch vụ email, tạm thời log link
-    // const baseUrl = env.APP_URL || 'http://localhost:3000'
-    // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-    // console.log('Family link URL:', link)
   }
 }
 

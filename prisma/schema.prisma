@@ -191,9 +191,11 @@ enum Gender {
 
 
 enum ResidentAssessmentStatus {
-  pending // chờ khám
-  done // khám xong
-  rejected // từ chối khám
+  pending // tạo lịch hẹn
+  canceled // hủy khám
+  completed // khám xong
+  joined // tham gia vào viện
+  rejected // từ chối chung
 }
 
 enum DiseaseSeverity {
@@ -292,7 +294,7 @@ model UserToken {
 model Resident {
   resident_id       String   @id @default(uuid())
   user_id           String?  @unique   
-  institution_id    String
+  institution_id    String?
   room_id           String?
   full_name         String
   gender            Gender
@@ -300,7 +302,7 @@ model Resident {
   
   notes             String?
   assigned_staff_id String?
-  admission_date    DateTime
+  admission_date    DateTime?
   created_at        DateTime @default(now())
 
   chronicDiseases   ChronicDisease[]
@@ -308,7 +310,7 @@ model Resident {
 
   user           User?        @relation("ResidentUser", fields: [user_id], references: [user_id])
 
-  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+  institution    Institution?  @relation(fields: [institution_id], references: [institution_id])
   room           Room?        @relation(fields: [room_id], references: [room_id])
 
   assigned_staff User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
@@ -402,11 +404,11 @@ model FamilyResidentLink {
 
 model ResidentApplication {
   application_id String   @id @default(uuid())
-  family_user_id String? // null khi resident tự đăng ký
+  family_user_id String? 
   resident_id    String
   institution_id String
+  appointment_date DateTime 
   status         ResidentAssessmentStatus @default(pending)
-  notes          String?
   created_at     DateTime @default(now())
   institution    Institution    @relation(fields: [institution_id], references: [institution_id])
 }
