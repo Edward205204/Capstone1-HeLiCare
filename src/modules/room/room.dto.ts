@@ -1,17 +1,23 @@
-export interface CreateRoomDto {
+import { RoomType } from '@prisma/client'
+
+export interface CreateRoomReqBody {
   room_number: string
-  type: 'single' | 'double' | 'multi'
+  type: RoomType
   capacity: number
-  is_available?: boolean
-  notes?: string | null
+  notes?: string
 }
 
-export interface UpdateRoomDto {
+export interface UpdateRoomReqBody {
   room_number?: string
-  type?: 'single' | 'double' | 'multi'
+  type?: RoomType
   capacity?: number
-  is_available?: boolean
-  notes?: string | null
+  notes?: string
 }
 
+export interface AddResidentToRoomReqBody {
+  resident_id: string
+}
 
+export interface RemoveResidentFromRoomReqBody {
+  resident_id: string
+}

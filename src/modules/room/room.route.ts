@@ -1,76 +1,44 @@
 import { Router } from 'express'
-import { wrapRequestHandler } from '~/utils/handler'
-import { accessTokenValidator } from '../auth/auth.middleware'
-import {
-  addResidentToRoomValidator,
-  createRoomValidator,
-  institutionIdParamValidator,
-  isHandleByInstitutionAdminOrRoot,
-  mustMatchInstitutionParam,
-  roomIdValidator,
-  updateRoomValidator
-} from './room.middleware'
 import { roomController } from './room.controller'
+import {
+  isHandleByAdminOrRootAdmin,
+  createRoomValidator,
+  updateRoomValidator,
+  roomIdValidator,
+  institutionIdValidator,
+  addResidentToRoomValidator,
+  removeResidentFromRoomValidator
+} from './room.middleware'
+import { accessTokenValidator } from '../auth/auth.middleware'
 
 const roomRouter = Router()
 
-// Create room
-roomRouter.post(
-  '/:institution_id/rooms',
-  accessTokenValidator,
-  isHandleByInstitutionAdminOrRoot,
-  institutionIdParamValidator,
-  mustMatchInstitutionParam,
-  createRoomValidator,
-  wrapRequestHandler(roomController.createRoom)
-)
+// Tất cả routes đều cần access token
+roomRouter.use(accessTokenValidator)
 
-// Update room
-roomRouter.put(
-  '/:institution_id/rooms/:room_id',
-  accessTokenValidator,
-  isHandleByInstitutionAdminOrRoot,
-  institutionIdParamValidator,
-  mustMatchInstitutionParam,
-  roomIdValidator,
-  updateRoomValidator,
-  wrapRequestHandler(roomController.updateRoom)
-)
+// Tất cả routes đều cần quyền admin hoặc rootadmin
+roomRouter.use(isHandleByAdminOrRootAdmin)
 
-// Add resident to room
-roomRouter.post(
-  '/:institution_id/rooms/:room_id/residents',
-  accessTokenValidator,
-  isHandleByInstitutionAdminOrRoot,
-  institutionIdParamValidator,
-  mustMatchInstitutionParam,
-  roomIdValidator,
-  addResidentToRoomValidator,
-  wrapRequestHandler(roomController.addResidentToRoom)
-)
+// Routes cho quản lý phòng
+roomRouter.post('/institutions/:institution_id/rooms', institutionIdValidator, createRoomValidator, roomController.createRoom)
+roomRouter.get('/institutions/:institution_id/rooms', institutionIdValidator, roomController.getRoomsByInstitution)
+roomRouter.get('/rooms/:room_id', roomIdValidator, roomController.getRoomById)
+roomRouter.patch('/rooms/:room_id', roomIdValidator, updateRoomValidator, roomController.updateRoom)
+roomRouter.delete('/rooms/:room_id', roomIdValidator, roomController.deleteRoom)
 
-// List residents in room
-roomRouter.get(
-  '/:institution_id/rooms/:room_id/residents',
-  accessTokenValidator,
-  isHandleByInstitutionAdminOrRoot,
-  institutionIdParamValidator,
-  mustMatchInstitutionParam,
-  roomIdValidator,
-  wrapRequestHandler(roomController.listResidentsInRoom)
+// Routes cho quản lý resident trong phòng
+roomRouter.post('/institutions/:institution_id/rooms/:room_id/residents', 
+  institutionIdValidator, 
+  roomIdValidator, 
+  addResidentToRoomValidator, 
+  roomController.addResidentToRoom
 )
-
-// Delete room
-roomRouter.delete(
-  '/:institution_id/rooms/:room_id',
-  accessTokenValidator,
-  isHandleByInstitutionAdminOrRoot,
-  institutionIdParamValidator,
-  mustMatchInstitutionParam,
-  roomIdValidator,
-  wrapRequestHandler(roomController.deleteRoom)
+roomRouter.delete('/institutions/:institution_id/rooms/:room_id/residents', 
+  institutionIdValidator, 
+  roomIdValidator, 
+  removeResidentFromRoomValidator, 
+  roomController.removeResidentFromRoom
 )
+roomRouter.get('/rooms/:room_id/residents', roomIdValidator, roomController.getResidentsInRoom)
 
 export default roomRouter
-
-

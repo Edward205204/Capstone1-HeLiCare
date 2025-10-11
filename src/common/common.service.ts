@@ -1,9 +1,8 @@
-import { Institution, Resident, User, UserToken } from '@prisma/client'
+import { Institution, Resident, Room, User, UserToken } from '@prisma/client'
 import { TokenType } from '~/constants/token_type'
 import { prisma } from '~/utils/db'
 
 class CommonService {
-  constructor() {}
 
   checkEmailExist = (email: string): Promise<User | null> => {
     return prisma.user.findUnique({ where: { email } })
@@ -31,6 +30,10 @@ class CommonService {
 
   getResidentById = (resident_id: string): Promise<Resident | null> => {
     return prisma.resident.findUnique({ where: { resident_id } })
+  }
+
+  getRoomById = (room_id: string): Promise<Room | null> => {
+    return prisma.room.findUnique({ where: { room_id } })
   }
 }
 
