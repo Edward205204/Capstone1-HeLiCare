@@ -4,6 +4,7 @@ import { defaultErrorHandler } from './common/common.middleware'
 import { createServer } from 'http'
 import cors from 'cors'
 import institutionRouter from './modules/institution/institution.route'
+import roomRouter from './modules/room/room.route'
 import { env } from './utils/dot.env'
 
 const app = express()
@@ -13,6 +14,7 @@ app.use(cors())
 app.use(express.json())
 app.use('/auth', authRouter)
 app.use('/institution', institutionRouter)
+app.use('/api', roomRouter)
 
 app.use(defaultErrorHandler)
 httpServer.listen(PORT, () => {
