@@ -200,6 +200,7 @@ model Institution {
   rooms     Room[]
   residents Resident[]
   staffProfiles StaffProfile[]
+  visits    Visit[]
 }
 
 model User {
@@ -220,6 +221,8 @@ model User {
   resident                 Resident? @relation("ResidentUser")
   staffProfile             StaffProfile?
   familyResidentLinks      FamilyResidentLink[]
+  familyVisits             Visit[] @relation("FamilyVisits")
+  approvedVisits           Visit[] @relation("VisitApprover")
 }
 
 
@@ -286,6 +289,7 @@ model Resident {
 
   assigned_staff User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
   familyResidentLinks FamilyResidentLink[]
+  visits         Visit[]
 }
 
 model Room {
@@ -328,4 +332,30 @@ model ResidentApplication {
   status         ResidentApplicationStatus @default(pending)
   notes          String?
   created_at     DateTime @default(now())
+}
+
+model Visit {
+  visit_id       String     @id @default(uuid())
+  family_user_id String
+  resident_id    String
+  institution_id String
+  visit_date     DateTime
+  visit_time     String     // Format: "HH:MM" (e.g., "09:00", "14:30")
+  duration       Int        // Duration in minutes (default 60)
+  purpose        String?    // Purpose of visit
+  notes          String?    // Additional notes
+  status         VisitStatus @default(pending)
+  approved_by    String?    // User ID who approved (Admin/Staff)
+  approved_at    DateTime?
+  created_at     DateTime   @default(now())
+  updated_at     DateTime   @updatedAt
+
+  family_user    User       @relation("FamilyVisits", fields: [family_user_id], references: [user_id])
+  resident       Resident   @relation(fields: [resident_id], references: [resident_id])
+  institution    Institution @relation(fields: [institution_id], references: [institution_id])
+  approver       User?      @relation("VisitApprover", fields: [approved_by], references: [user_id])
+
+  @@unique([family_user_id, visit_date, visit_time])
+  @@index([visit_date, status])
+  @@index([institution_id, visit_date])
 }
