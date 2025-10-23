@@ -16,12 +16,11 @@ import {
   verifyRootAdminInviteTokenValidator,
   verifyStaffInviteTokenValidator,
   verifyAdminInviteTokenValidator,
-  sendFamilyLinkValidator,
   validateFamilyLinkTokenValidator,
-  confirmFamilyLinkValidator
+  confirmFamilyLinkValidator,
+  resendEmailVerifyValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
-import { isHandleByInstitutionAdmin } from '../institution/institution.middleware'
 
 const authRouter = Router()
 /**
@@ -49,7 +48,12 @@ authRouter.post('/register', registerValidator, wrapRequestHandler(authControlle
  * @path /auth/resend-email-verify
  * @response {message: string}
  */
-authRouter.post('/resend-email-verify', accessTokenValidator, wrapRequestHandler(authController.resendEmailVerify))
+
+authRouter.post(
+  '/resend-email-verify',
+  resendEmailVerifyValidator,
+  wrapRequestHandler(authController.resendEmailVerify)
+)
 
 authRouter.post(
   '/verify-email',
@@ -215,13 +219,13 @@ authRouter.post(
  * @path /auth/send-family-link
  * @body {resident_id: string, family_email: string}
  */
-authRouter.post(
-  '/send-family-link',
-  accessTokenValidator,
-  isHandleByInstitutionAdmin,
-  sendFamilyLinkValidator,
-  wrapRequestHandler(authController.sendFamilyLink)
-)
+// authRouter.post(
+//   '/send-family-link',
+//   accessTokenValidator,
+//   isHandleByInstitutionAdmin,
+//   sendFamilyLinkValidator,
+//   wrapRequestHandler(authController.sendFamilyLink)
+// )
 
 /**
  * @description Validate token family link để frontend redirect đến trang xác thực

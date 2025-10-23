@@ -1,4 +1,4 @@
-import { StaffPosition, UserRole } from '@prisma/client'
+import { StaffPosition } from '@prisma/client'
 import { ParamSchema } from 'express-validator'
 import capitalize from 'lodash/capitalize'
 import { JsonWebTokenError } from 'jsonwebtoken'
@@ -49,16 +49,7 @@ export const confirmPasswordSchema: ParamSchema = {
 
 export const userRoleSchema: ParamSchema = {
   isIn: {
-    options: [
-      [
-        UserRole.PlatformSuperAdmin,
-        UserRole.RootAdmin,
-        UserRole.Admin,
-        UserRole.Staff,
-        UserRole.Family,
-        UserRole.Resident
-      ]
-    ],
+    options: [['Family', 'Resident']],
     errorMessage: 'User role is invalid'
   }
 }

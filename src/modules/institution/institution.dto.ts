@@ -1,5 +1,5 @@
-import AddressJson from '~/constants/address_json'
-import { ContactJson } from '~/constants/contact_json'
+import AddressJson from '~/models/address_json'
+import { ContactJson } from '~/models/contact_json'
 
 export interface InstitutionUpdateData {
   institution_id: string

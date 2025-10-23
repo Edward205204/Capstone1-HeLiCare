@@ -2,7 +2,7 @@ import { checkSchema } from 'express-validator'
 import { validate } from '~/utils/validate'
 import { verifyPassword } from '~/utils/hash'
 import { commonService } from '~/common/common.service'
-import { InstitutionContractStatus, UserRole } from '@prisma/client'
+import { InstitutionContractStatus, User, UserRole } from '@prisma/client'
 import { ErrorWithStatus } from '~/models/error'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { accessTokenDecode } from '~/utils/access_token_decode'
@@ -47,7 +47,7 @@ export const loginValidator = validate(
             if (!user) {
               throw new ErrorWithStatus({
                 message: 'Email does not exist',
-                status: HTTP_STATUS.UNAUTHORIZED
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
               })
             }
             req.user = user
@@ -59,21 +59,27 @@ export const loginValidator = validate(
         ...passwordSchema,
         custom: {
           options: async (value, { req }) => {
-            const user = await commonService.checkEmailExist(req.body.email)
-            if (!user) {
-              throw new ErrorWithStatus({
-                message: 'Email does not exist',
-                status: HTTP_STATUS.UNAUTHORIZED
-              })
-            }
+            const user = (await commonService.checkEmailExist(req.body.email)) as User
             const isValidPassword = await verifyPassword(value, user.password)
             if (!isValidPassword) {
-              throw new Error('Password is incorrect')
+              throw new ErrorWithStatus({
+                message: 'Password is incorrect',
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
+              })
             }
             return true
           }
         }
       }
+    },
+    ['body']
+  )
+)
+
+export const resendEmailVerifyValidator = validate(
+  checkSchema(
+    {
+      email: emailSchema
     },
     ['body']
   )
@@ -90,7 +96,7 @@ export const registerValidator = validate(
             if (user) {
               throw new ErrorWithStatus({
                 message: 'Email already exists',
-                status: HTTP_STATUS.CONFLICT
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
               })
             }
             return true

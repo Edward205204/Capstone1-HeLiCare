@@ -3,14 +3,15 @@ import { accessTokenValidator } from '../auth/auth.middleware'
 
 import { wrapRequestHandler } from '~/utils/handler'
 import { residentController } from './resident.controller'
-import { isHandleByStaffValidator, residentIdValidator } from './resident.middleware'
+import { getApplicantValidator, residentIdValidator } from './resident.middleware'
+import { isHandleByStaffValidator } from '~/common/common.middleware'
 const residentRouter = Router()
 
 residentRouter.get(
   '/get-resident',
   accessTokenValidator,
   isHandleByStaffValidator,
-  wrapRequestHandler(wrapRequestHandler(residentController.getListResident))
+  wrapRequestHandler(residentController.getListResident)
 )
 
 residentRouter.get(
@@ -22,17 +23,51 @@ residentRouter.get(
 )
 
 residentRouter.get(
-  '/get-applicant-by-family-full-name',
+  '/get-applicant',
   accessTokenValidator,
   isHandleByStaffValidator,
-  wrapRequestHandler(residentController.getApplicantByFamilyFullName)
+  getApplicantValidator,
+  wrapRequestHandler(residentController.getApplicant)
 )
 
+residentRouter.post('/create-resident', accessTokenValidator, wrapRequestHandler(residentController.createResident))
+
 residentRouter.post(
-  '/create-profile-for-resident',
+  '/create-applicant',
   accessTokenValidator,
   isHandleByStaffValidator,
-  wrapRequestHandler(residentController.createProfileForResident)
+  wrapRequestHandler(residentController.createApplicant)
+)
+
+// lấy lịch hẹn đang pending trong ngày hôm nay
+residentRouter.get(
+  '/get-appointment-pending',
+  accessTokenValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.getAppointmentPending)
+)
+
+residentRouter.get(
+  '/get-appointment-query',
+  accessTokenValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.getAppointmentQuery)
+)
+
+// lấy toàn bộ lịch hẹn thuộc một viện dưỡng lão
+residentRouter.get(
+  '/get-appointment-history',
+  accessTokenValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.getAppointmentHistory)
+)
+
+// thực hiện bởi nhân viên của viện, gửi lên resident id qua body
+residentRouter.post(
+  '/join-institution',
+  accessTokenValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.joinInstitution)
 )
 
 export default residentRouter

@@ -20,6 +20,118 @@ datasource db {
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
+enum CareLogType {
+  meal
+  exercise
+  hygiene
+  medication
+  custom
+}
+
+enum CareTaskStatus {
+  pending
+  in_progress
+  completed
+}
+
+enum MedicationStatus {
+  scheduled
+  administered
+  skipped
+}
+
+enum AlertType {
+  SOS
+  HealthAnomaly
+  OverduePayment
+  LowStock
+  FullRoom
+}
+
+enum NotificationType {
+  Alert
+  ServiceSuggestion
+  PaymentReminder
+  VisitReminder
+}
+
+enum ServiceType {
+  base
+  add_on
+  special
+}
+
+enum ContractStatus {
+  active
+  expired
+  cancelled
+}
+
+enum ContractServiceStatus {
+  active
+  expired
+  cancelled
+}
+
+enum PaymentFrequency {
+  monthly
+  annually
+}
+
+enum PaymentStatus {
+  paid
+  overdue
+  pending
+}
+
+enum SpecialCareStatus {
+  suggested
+  accepted
+  declined
+  active
+  completed
+}
+
+enum ActivityStatus {
+  planned
+  participated
+  did_not_participate
+}
+
+enum VisitStatus {
+  pending
+  approved
+  rejected
+  completed
+}
+
+enum InvitationStatus {
+  sent
+  accepted
+  expired
+}
+
+enum ActivityType {
+  physical_exercise
+  mental_activity
+  social_interaction
+  meal_time
+  medical_checkup
+  therapy
+  entertainment
+  education
+  religious_service
+  other
+}
+
+enum ScheduleFrequency {
+  daily
+  weekly
+  monthly
+  one_time
+  custom
+}
+
 enum UserRole {
   PlatformSuperAdmin
   RootAdmin
@@ -53,68 +165,10 @@ enum MobilityStatus {
   DEPENDENT
 }
 
-enum MedicationStatus {
-  scheduled
-  administered
-  skipped
-}
-
-enum CareLogType {
-  meal
-  exercise
-  hygiene
-  medication
-  custom
-}
-
-enum CareTaskStatus {
-  pending
-  in_progress
-  completed
-}
-
-enum AlertType {
-  SOS
-  HealthAnomaly
-  OverduePayment
-  LowStock
-  FullRoom
-}
-
-enum NotificationType {
-  Alert
-  ServiceSuggestion
-  PaymentReminder
-  VisitReminder
-}
-
 enum RoomType {
   single
   double
   multi
-}
-
-enum ServiceType {
-  base
-  add_on
-  special
-}
-
-enum ContractStatus {
-  active
-  expired
-  cancelled
-}
-
-enum ContractServiceStatus {
-  active
-  expired
-  cancelled
-}
-
-enum PaymentFrequency {
-  monthly
-  annually
 }
 
 enum PaymentMethod {
@@ -123,43 +177,12 @@ enum PaymentMethod {
   paypal
 }
 
-enum PaymentStatus {
-  paid
-  overdue
-  pending
-}
 
-enum SpecialCareStatus {
-  suggested
-  accepted
-  declined
-  active
-  completed
-}
-
-enum ActivityStatus {
-  planned
-  participated
-  did_not_participate
-}
-
-enum VisitStatus {
-  pending
-  approved
-  rejected
-  completed
-}
 
 enum FamilyLinkStatus {
   pending
   active
   revoked
-}
-
-enum InvitationStatus {
-  sent
-  accepted
-  expired
 }
 
 enum TokenType {
@@ -187,6 +210,32 @@ enum Gender {
   female
 }
 
+
+enum ResidentAssessmentStatus {
+  pending // tạo lịch hẹn
+  canceled // hủy khám
+  completed // khám xong
+  joined // tham gia vào viện
+  rejected // từ chối chung
+}
+
+enum DiseaseSeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum DiseaseStatus {
+  ACTIVE
+  RECOVERED
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
 model Institution {
   institution_id String   @id @default(uuid())
   name           String
@@ -201,6 +250,11 @@ model Institution {
   residents Resident[]
   staffProfiles StaffProfile[]
   visits    Visit[]
+  familyResidentLinks FamilyResidentLink[]
+  residentApplications ResidentApplication[]
+  activities Activity[]
+  schedules Schedule[]
+  careLogs  CareLog[]
 }
 
 model User {
@@ -223,8 +277,10 @@ model User {
   familyResidentLinks      FamilyResidentLink[]
   familyVisits             Visit[] @relation("FamilyVisits")
   approvedVisits           Visit[] @relation("VisitApprover")
+  healthAssessments        HealthAssessment[] @relation("StaffAssessments")
+  staffSchedules           Schedule[] @relation("StaffSchedules")
+  staffCareLogs            CareLog[] @relation("StaffCareLogs")
 }
-
 
 model StaffProfile {
   user_id       String   @unique @id
@@ -267,30 +323,88 @@ model UserToken {
 model Resident {
   resident_id       String   @id @default(uuid())
   user_id           String?  @unique   
-  institution_id    String
+  institution_id    String?
   room_id           String?
   full_name         String
   gender            Gender
   date_of_birth     DateTime
-  cognitive_status  CognitiveStatus?
-  mobility_status   MobilityStatus?
-  chronic_diseases  Json?
-  allergies         Json?
   
   notes             String?
   assigned_staff_id String?
-  admission_date    DateTime
+  admission_date    DateTime?
   created_at        DateTime @default(now())
+
+  chronicDiseases   ChronicDisease[]
+  allergies         Allergy[]
 
   user           User?        @relation("ResidentUser", fields: [user_id], references: [user_id])
 
-  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+  institution    Institution?  @relation(fields: [institution_id], references: [institution_id])
   room           Room?        @relation(fields: [room_id], references: [room_id])
 
   assigned_staff User?        @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
   familyResidentLinks FamilyResidentLink[]
   visits         Visit[]
+  healthAssessments HealthAssessment[]
+  schedules Schedule[]
+  careLogs CareLog[]
 }
+
+model HealthAssessment {
+  assessment_id   String    @id @default(uuid())
+  resident_id     String   
+  assessed_by_id  String  
+
+  cognitive_status  CognitiveStatus @default(NORMAL)
+  mobility_status   MobilityStatus @default(INDEPENDENT)
+  weight_kg         Float?
+  height_cm         Float?
+  bmi               Float?
+  
+  temperature_c     Float?
+  blood_pressure_systolic   Int?
+  blood_pressure_diastolic  Int?
+  heart_rate        Int?
+  respiratory_rate  Int?
+  oxygen_saturation Int?
+
+  notes             String?   
+  created_at        DateTime  @default(now())
+
+  resident         Resident  @relation(fields: [resident_id], references: [resident_id])
+  assessed_by      User      @relation("StaffAssessments", fields: [assessed_by_id], references: [user_id])
+  @@index([resident_id])
+}
+
+// Bệnh mãn tính
+model ChronicDisease {
+  id           String   @id @default(uuid())
+  resident_id  String
+  name         String                     // Tên bệnh
+  diagnosed_at DateTime?                  // Ngày phát hiện
+  severity     DiseaseSeverity?           // Mức độ (enum)
+  status       DiseaseStatus? @default(ACTIVE) // Còn mắc / đã khỏi
+  note         String?                    // Ghi chú thêm
+  created_at   DateTime   @default(now())
+
+  resident     Resident  @relation(fields: [resident_id], references: [resident_id])
+}
+
+// Dị ứng
+model Allergy {
+  id           String   @id @default(uuid())
+  resident_id  String
+  substance    String                     // Tác nhân gây dị ứng
+  reaction     String?                    // Phản ứng (vd: phát ban, khó thở)
+  severity     AllergySeverity?           // Mức độ phản ứng
+  note         String?
+  created_at   DateTime   @default(now())
+
+  resident     Resident  @relation(fields: [resident_id], references: [resident_id])
+}
+
+
+
 
 model Room {
   room_id           String   @id @default(uuid())
@@ -310,26 +424,105 @@ model FamilyResidentLink {
   link_id         String         @id @default(uuid())
   family_user_id  String
   resident_id     String
+  institution_id  String
   status          FamilyLinkStatus @default(pending)
   created_at      DateTime       @default(now())
 
   family_user     User           @relation(fields: [family_user_id], references: [user_id])
   resident        Resident       @relation(fields: [resident_id], references: [resident_id])
-
+  institution     Institution    @relation(fields: [institution_id], references: [institution_id])
   @@unique([family_user_id, resident_id])
-}
-
-enum ResidentApplicationStatus {
-  pending
-  approved
-  rejected
 }
 
 model ResidentApplication {
   application_id String   @id @default(uuid())
-  family_user_id String? // null khi resident tự đăng ký
+  family_user_id String? 
   resident_id    String
-  status         ResidentApplicationStatus @default(pending)
+  institution_id String
+  appointment_date DateTime 
+  status         ResidentAssessmentStatus @default(pending)
+  created_at     DateTime @default(now())
+  institution    Institution    @relation(fields: [institution_id], references: [institution_id])
+}
+
+// Activity Management Models
+model Activity {
+  activity_id    String       @id @default(uuid())
+  institution_id String
+  name           String
+  description    String?
+  type           ActivityType
+  duration_minutes Int?
+  max_participants Int?
+  is_active      Boolean      @default(true)
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+
+  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+  schedules      Schedule[]
+  careLogs       CareLog[]
+  @@index([institution_id])
+}
+
+model Schedule {
+  schedule_id    String           @id @default(uuid())
+  activity_id    String
+  institution_id String
+  resident_id    String?
+  staff_id       String?
+  
+  title          String
+  description    String?
+  start_time     DateTime
+  end_time       DateTime
+  frequency      ScheduleFrequency @default(one_time)
+  is_recurring   Boolean          @default(false)
+  recurring_until DateTime?
+  
+  status         ActivityStatus   @default(planned)
+  notes          String?
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+
+  activity       Activity         @relation(fields: [activity_id], references: [activity_id])
+  institution    Institution      @relation(fields: [institution_id], references: [institution_id])
+  resident       Resident?        @relation(fields: [resident_id], references: [resident_id])
+  staff          User?            @relation("StaffSchedules", fields: [staff_id], references: [user_id])
+  careLogs       CareLog[]
+  @@index([institution_id, start_time])
+  @@index([resident_id])
+}
+
+model CareLog {
+  care_log_id    String       @id @default(uuid())
+  resident_id    String
+  staff_id       String
+  activity_id    String?
+  schedule_id    String?
+  institution_id String
+  
+  type           CareLogType
+  title          String
+  description    String?
+  start_time     DateTime
+  end_time       DateTime?
+  status         CareTaskStatus @default(pending)
+  
+  // Medication specific fields
+  medication_name String?
+  dosage         String?
+  medication_status MedicationStatus?
+  
+  // Meal specific fields
+  meal_type      String? // breakfast, lunch, dinner, snack
+  food_items     String?
+  quantity       String?
+  
+  // Exercise specific fields
+  exercise_type  String?
+  duration_minutes Int?
+  intensity      String? // low, medium, high
+  
   notes          String?
   created_at     DateTime @default(now())
 }
@@ -359,3 +552,15 @@ model Visit {
   @@index([visit_date, status])
   @@index([institution_id, visit_date])
 }
+  updated_at     DateTime @updatedAt
+
+  resident       Resident     @relation(fields: [resident_id], references: [resident_id])
+  staff          User         @relation("StaffCareLogs", fields: [staff_id], references: [user_id])
+  activity       Activity?    @relation(fields: [activity_id], references: [activity_id])
+  schedule       Schedule?    @relation(fields: [schedule_id], references: [schedule_id])
+  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+  @@index([resident_id, start_time])
+  @@index([staff_id])
+  @@index([institution_id])
+}
+
