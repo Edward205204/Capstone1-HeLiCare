@@ -5,6 +5,7 @@ import { createServer } from 'http'
 import cors from 'cors'
 import institutionRouter from './modules/institution/institution.route'
 import roomRouter from './modules/room/room.route'
+import visitRouter from './modules/visit/visit.route'
 import activityRouter from './modules/activity/activity.route'
 import careLogRouter from './modules/carelog/carelog.route'
 import scheduleRouter from './modules/schedule/schedule.route'
@@ -18,6 +19,7 @@ app.use(express.json())
 app.use('/auth', authRouter)
 app.use('/institution', institutionRouter)
 app.use('/api', roomRouter)
+app.use('/api', visitRouter)
 app.use('/api/activities', activityRouter)
 app.use('/api/carelogs', careLogRouter)
 app.use('/api/schedules', scheduleRouter)

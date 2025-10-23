@@ -1,4 +1,4 @@
-import { Institution, Resident, Room, User, UserToken } from '@prisma/client'
+import { Institution, Resident, Room, User, UserToken, Visit, FamilyResidentLink } from '@prisma/client'
 import { TokenType } from '~/constants/token_type'
 import { prisma } from '~/utils/db'
 
@@ -34,6 +34,21 @@ class CommonService {
 
   getRoomById = (room_id: string): Promise<Room | null> => {
     return prisma.room.findUnique({ where: { room_id } })
+  }
+
+  getVisitById = (visit_id: string): Promise<Visit | null> => {
+    return prisma.visit.findUnique({ where: { visit_id } })
+  }
+
+  getFamilyResidentLink = (family_user_id: string, resident_id: string): Promise<FamilyResidentLink | null> => {
+    return prisma.familyResidentLink.findUnique({
+      where: {
+        family_user_id_resident_id: {
+          family_user_id,
+          resident_id
+        }
+      }
+    })
   }
 }
 
