@@ -1,11 +1,5 @@
 import { Router } from 'express'
 import { scheduleController } from './schedule.controller'
-// import {
-//   createScheduleSchema,
-//   updateScheduleSchema,
-//   getScheduleByIdSchema,
-//   getSchedulesSchema
-// } from './schedule.schema'
 import {
   checkScheduleOwnership,
   checkScheduleExists,
@@ -17,33 +11,41 @@ import { accessTokenValidator } from '~/modules/auth/auth.middleware'
 
 const router = Router()
 
-// Apply authentication middleware to all routes
-router.use(accessTokenValidator)
+router.post(
+  '/',
+  accessTokenValidator,
+  checkActivityExists,
+  checkResidentAccess,
+  checkStaffAccess,
+  scheduleController.createSchedule
+)
 
-// POST /api/schedules - Create new schedule
-router.post('/', checkActivityExists, checkResidentAccess, checkStaffAccess, scheduleController.createSchedule)
+router.get('/', accessTokenValidator, scheduleController.getSchedules)
 
-// GET /api/schedules - Get all schedules with pagination and filters
-router.get('/', scheduleController.getSchedules)
+router.get('/upcoming', accessTokenValidator, scheduleController.getUpcomingSchedules)
 
-// GET /api/schedules/upcoming - Get upcoming schedules
-router.get('/upcoming', scheduleController.getUpcomingSchedules)
+router.get('/statistics', accessTokenValidator, scheduleController.getScheduleStatistics)
 
-// GET /api/schedules/statistics - Get schedule statistics
-router.get('/statistics', scheduleController.getScheduleStatistics)
+router.get(
+  '/resident/:resident_id',
+  accessTokenValidator,
+  checkResidentAccess,
+  scheduleController.getSchedulesByResident
+)
 
-// GET /api/schedules/resident/:resident_id - Get schedules by resident
-router.get('/resident/:resident_id', checkResidentAccess, scheduleController.getSchedulesByResident)
+router.get('/staff/:staff_id', accessTokenValidator, checkStaffAccess, scheduleController.getSchedulesByStaff)
 
-// GET /api/schedules/staff/:staff_id - Get schedules by staff
-router.get('/staff/:staff_id', checkStaffAccess, scheduleController.getSchedulesByStaff)
+router.get(
+  '/:schedule_id',
+  accessTokenValidator,
+  checkScheduleExists,
+  checkScheduleOwnership,
+  scheduleController.getScheduleById
+)
 
-// GET /api/schedules/:schedule_id - Get schedule by ID
-router.get('/:schedule_id', checkScheduleExists, checkScheduleOwnership, scheduleController.getScheduleById)
-
-// PUT /api/schedules/:schedule_id - Update schedule
 router.put(
   '/:schedule_id',
+  accessTokenValidator,
   checkScheduleExists,
   checkScheduleOwnership,
   checkActivityExists,
@@ -52,15 +54,20 @@ router.put(
   scheduleController.updateSchedule
 )
 
-// PATCH /api/schedules/:schedule_id/status - Update schedule status
 router.patch(
   '/:schedule_id/status',
+  accessTokenValidator,
   checkScheduleExists,
   checkScheduleOwnership,
   scheduleController.updateScheduleStatus
 )
 
-// DELETE /api/schedules/:schedule_id - Delete schedule
-router.delete('/:schedule_id', checkScheduleExists, checkScheduleOwnership, scheduleController.deleteSchedule)
+router.delete(
+  '/:schedule_id',
+  accessTokenValidator,
+  checkScheduleExists,
+  checkScheduleOwnership,
+  scheduleController.deleteSchedule
+)
 
 export default router

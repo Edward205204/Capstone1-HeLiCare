@@ -14,19 +14,39 @@ import { accessTokenValidator } from '../auth/auth.middleware'
 
 const visitRouter = Router()
 
-// Tất cả routes đều cần access token
-visitRouter.use(accessTokenValidator)
+visitRouter.post('/visits', accessTokenValidator, isHandleByFamily, createVisitValidator, visitController.createVisit)
+visitRouter.get(
+  '/visits',
+  accessTokenValidator,
+  isHandleByFamily,
+  getVisitsByFamilyValidator,
+  visitController.getVisitsByFamily
+)
+visitRouter.get('/visits/:visit_id', accessTokenValidator, visitIdValidator, visitController.getVisitById)
+visitRouter.patch(
+  '/visits/:visit_id',
+  accessTokenValidator,
+  visitIdValidator,
+  updateVisitValidator,
+  visitController.updateVisit
+)
+visitRouter.delete('/visits/:visit_id', accessTokenValidator, visitIdValidator, visitController.deleteVisit)
 
-// Routes cho Family
-visitRouter.post('/visits', isHandleByFamily, createVisitValidator, visitController.createVisit)
-visitRouter.get('/visits', isHandleByFamily, getVisitsByFamilyValidator, visitController.getVisitsByFamily)
-visitRouter.get('/visits/:visit_id', visitIdValidator, visitController.getVisitById)
-visitRouter.patch('/visits/:visit_id', visitIdValidator, updateVisitValidator, visitController.updateVisit)
-visitRouter.delete('/visits/:visit_id', visitIdValidator, visitController.deleteVisit)
-
-// Routes cho Admin/Staff
-visitRouter.get('/admin/visits/date', isHandleByAdminOrStaff, getVisitsByDateValidator, visitController.getVisitsByDate)
-visitRouter.patch('/admin/visits/:visit_id/approve', isHandleByAdminOrStaff, visitIdValidator, approveVisitValidator, visitController.approveVisit)
-visitRouter.get('/admin/visits/stats', isHandleByAdminOrStaff, visitController.getVisitStats)
+visitRouter.get(
+  '/admin/visits/date',
+  accessTokenValidator,
+  isHandleByAdminOrStaff,
+  getVisitsByDateValidator,
+  visitController.getVisitsByDate
+)
+visitRouter.patch(
+  '/admin/visits/:visit_id/approve',
+  accessTokenValidator,
+  isHandleByAdminOrStaff,
+  visitIdValidator,
+  approveVisitValidator,
+  visitController.approveVisit
+)
+visitRouter.get('/admin/visits/stats', accessTokenValidator, isHandleByAdminOrStaff, visitController.getVisitStats)
 
 export default visitRouter

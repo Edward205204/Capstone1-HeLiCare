@@ -1,10 +1,14 @@
 import { Request, Response } from 'express'
 import { roomService } from './room.service'
 import { HTTP_STATUS } from '~/constants/http_status'
-import { CreateRoomReqBody, UpdateRoomReqBody, AddResidentToRoomReqBody, RemoveResidentFromRoomReqBody } from './room.dto'
+import {
+  CreateRoomReqBody,
+  UpdateRoomReqBody,
+  AddResidentToRoomReqBody,
+  RemoveResidentFromRoomReqBody
+} from './room.dto'
 
 class RoomController {
-
   // Tạo phòng mới
   createRoom = async (req: Request, res: Response) => {
     const { institution_id } = req.params
