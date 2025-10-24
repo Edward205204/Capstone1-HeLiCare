@@ -22,19 +22,19 @@ export const visitDateSchema = {
       const visitDate = new Date(value)
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      
+
       if (visitDate < today) {
         throw new Error('Visit date cannot be in the past')
       }
-      
+
       // Không cho phép đặt lịch quá 30 ngày trong tương lai
       const maxDate = new Date()
       maxDate.setDate(maxDate.getDate() + 30)
-      
+
       if (visitDate > maxDate) {
         throw new Error('Visit date cannot be more than 30 days in the future')
       }
-      
+
       return true
     }
   }
@@ -51,12 +51,12 @@ export const visitTimeSchema = {
   custom: {
     options: (value: string) => {
       const [hours] = value.split(':').map(Number)
-      
+
       // Chỉ cho phép thăm viếng từ 8:00 đến 18:00
       if (hours < 8 || hours > 18) {
         throw new Error('Visit time must be between 08:00 and 18:00')
       }
-      
+
       return true
     }
   }
