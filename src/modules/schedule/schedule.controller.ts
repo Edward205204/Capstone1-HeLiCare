@@ -11,9 +11,9 @@ class ScheduleController {
   createSchedule = async (req: Request, res: Response) => {
     const institution_id = req.decoded_authorization?.institution_id as string
     const data = req.body as CreateScheduleDto
-    
+
     const schedule = await this.scheduleService.createSchedule(institution_id, data)
-    
+
     res.status(HTTP_STATUS.CREATED).json({
       message: 'Schedule created successfully',
       data: schedule
@@ -24,9 +24,9 @@ class ScheduleController {
   getSchedules = async (req: Request, res: Response) => {
     const institution_id = req.decoded_authorization?.institution_id as string
     const query = req.query as unknown as GetSchedulesQueryParams
-    
+
     const result = await this.scheduleService.getSchedulesByInstitution(institution_id, query)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Schedules fetched successfully',
       data: {
@@ -40,16 +40,16 @@ class ScheduleController {
 
   getScheduleById = async (req: Request, res: Response) => {
     const { schedule_id } = req.params
-    
+
     const schedule = await this.scheduleService.getScheduleById(schedule_id)
-    
+
     if (!schedule) {
       res.status(HTTP_STATUS.NOT_FOUND).json({
         message: 'Schedule not found'
       })
       return
     }
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Schedule fetched successfully',
       data: schedule
@@ -59,13 +59,9 @@ class ScheduleController {
   getSchedulesByResident = async (req: Request, res: Response) => {
     const { resident_id } = req.params
     const { take, skip } = req.query
-    
-    const result = await this.scheduleService.getSchedulesByResident(
-      resident_id,
-      Number(take) || 10,
-      Number(skip) || 0
-    )
-    
+
+    const result = await this.scheduleService.getSchedulesByResident(resident_id, Number(take) || 10, Number(skip) || 0)
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Resident schedules fetched successfully',
       data: {
@@ -80,13 +76,9 @@ class ScheduleController {
   getSchedulesByStaff = async (req: Request, res: Response) => {
     const { staff_id } = req.params
     const { take, skip } = req.query
-    
-    const result = await this.scheduleService.getSchedulesByStaff(
-      staff_id,
-      Number(take) || 10,
-      Number(skip) || 0
-    )
-    
+
+    const result = await this.scheduleService.getSchedulesByStaff(staff_id, Number(take) || 10, Number(skip) || 0)
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Staff schedules fetched successfully',
       data: {
@@ -101,12 +93,9 @@ class ScheduleController {
   getUpcomingSchedules = async (req: Request, res: Response) => {
     const institution_id = req.decoded_authorization?.institution_id as string
     const { days } = req.query
-    
-    const schedules = await this.scheduleService.getUpcomingSchedules(
-      institution_id,
-      Number(days) || 7
-    )
-    
+
+    const schedules = await this.scheduleService.getUpcomingSchedules(institution_id, Number(days) || 7)
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Upcoming schedules fetched successfully',
       data: schedules
@@ -115,9 +104,9 @@ class ScheduleController {
 
   getScheduleStatistics = async (req: Request, res: Response) => {
     const institution_id = req.decoded_authorization?.institution_id as string
-    
+
     const statistics = await this.scheduleService.getScheduleStatistics(institution_id)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Schedule statistics fetched successfully',
       data: statistics
@@ -128,9 +117,9 @@ class ScheduleController {
   updateSchedule = async (req: Request, res: Response) => {
     const { schedule_id } = req.params
     const data = req.body as UpdateScheduleDto
-    
+
     const schedule = await this.scheduleService.updateSchedule(schedule_id, data)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Schedule updated successfully',
       data: schedule
@@ -140,16 +129,16 @@ class ScheduleController {
   updateScheduleStatus = async (req: Request, res: Response) => {
     const { schedule_id } = req.params
     const { status } = req.body
-    
+
     if (!Object.values(ActivityStatus).includes(status)) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         message: 'Invalid schedule status'
       })
       return
     }
-    
+
     const schedule = await this.scheduleService.updateScheduleStatus(schedule_id, status)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Schedule status updated successfully',
       data: schedule
@@ -159,9 +148,9 @@ class ScheduleController {
   // DELETE Methods
   deleteSchedule = async (req: Request, res: Response) => {
     const { schedule_id } = req.params
-    
+
     const schedule = await this.scheduleService.deleteSchedule(schedule_id)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Schedule deleted successfully',
       data: schedule

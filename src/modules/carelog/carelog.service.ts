@@ -50,17 +50,7 @@ export class CareLogService {
     institution_id: string,
     params: GetCareLogsQueryParams = {}
   ): Promise<{ data: CareLogResponse[]; total: number }> {
-    const { 
-      take = 10, 
-      skip = 0, 
-      resident_id, 
-      staff_id, 
-      type, 
-      status, 
-      start_date, 
-      end_date, 
-      search 
-    } = params
+    const { take = 10, skip = 0, resident_id, staff_id, type, status, start_date, end_date, search } = params
 
     const where: any = {
       institution_id
@@ -228,7 +218,11 @@ export class CareLogService {
     })
   }
 
-  async getCareLogsByResident(resident_id: string, take = 10, skip = 0): Promise<{ data: CareLogResponse[]; total: number }> {
+  async getCareLogsByResident(
+    resident_id: string,
+    take = 10,
+    skip = 0
+  ): Promise<{ data: CareLogResponse[]; total: number }> {
     const [data, total] = await Promise.all([
       prisma.careLog.findMany({
         where: { resident_id },

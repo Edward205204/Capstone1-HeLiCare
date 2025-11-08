@@ -23,9 +23,9 @@ import {
 export const isHandleByFamily = (req: Request, res: Response, next: NextFunction) => {
   if (req.decoded_authorization?.role !== UserRole.Family) {
     return next(
-      new ErrorWithStatus({ 
-        message: 'You are not authorized to perform this action. Only Family can manage visits.', 
-        status: HTTP_STATUS.UNAUTHORIZED 
+      new ErrorWithStatus({
+        message: 'You are not authorized to perform this action. Only Family can manage visits.',
+        status: HTTP_STATUS.UNAUTHORIZED
       })
     )
   }
@@ -34,13 +34,15 @@ export const isHandleByFamily = (req: Request, res: Response, next: NextFunction
 
 // Middleware kiểm tra quyền admin/staff để duyệt lịch hẹn
 export const isHandleByAdminOrStaff = (req: Request, res: Response, next: NextFunction) => {
-  if (req.decoded_authorization?.role !== UserRole.Admin && 
-      req.decoded_authorization?.role !== UserRole.RootAdmin &&
-      req.decoded_authorization?.role !== UserRole.Staff) {
+  if (
+    req.decoded_authorization?.role !== UserRole.Admin &&
+    req.decoded_authorization?.role !== UserRole.RootAdmin &&
+    req.decoded_authorization?.role !== UserRole.Staff
+  ) {
     return next(
-      new ErrorWithStatus({ 
-        message: 'You are not authorized to perform this action. Only Admin, RootAdmin and Staff can approve visits.', 
-        status: HTTP_STATUS.UNAUTHORIZED 
+      new ErrorWithStatus({
+        message: 'You are not authorized to perform this action. Only Admin, RootAdmin and Staff can approve visits.',
+        status: HTTP_STATUS.UNAUTHORIZED
       })
     )
   }
@@ -62,7 +64,7 @@ export const createVisitValidator = validate(
                 status: HTTP_STATUS.NOT_FOUND
               })
             }
-            
+
             // Kiểm tra family có quyền thăm resident này không
             const familyLink = await commonService.getFamilyResidentLink(req.decoded_authorization?.user_id, value)
             if (!familyLink || familyLink.status !== 'active') {
@@ -71,7 +73,7 @@ export const createVisitValidator = validate(
                 status: HTTP_STATUS.FORBIDDEN
               })
             }
-            
+
             return true
           }
         }
@@ -115,7 +117,7 @@ export const visitIdValidator = validate(
                 status: HTTP_STATUS.NOT_FOUND
               })
             }
-            
+
             // Kiểm tra quyền truy cập
             if (req.decoded_authorization?.role === UserRole.Family) {
               if (visit.family_user_id !== req.decoded_authorization?.user_id) {
@@ -125,7 +127,7 @@ export const visitIdValidator = validate(
                 })
               }
             }
-            
+
             return true
           }
         }
@@ -160,15 +162,6 @@ export const getVisitsByDateValidator = validate(
 export const getVisitsByFamilyValidator = validate(
   checkSchema(
     {
-      family_user_id: {
-        optional: true,
-        isString: {
-          errorMessage: 'Family user ID must be a string'
-        },
-        isUUID: {
-          errorMessage: 'Family user ID must be a valid UUID'
-        }
-      },
       status: {
         optional: true,
         isIn: {
@@ -197,5 +190,93 @@ export const getVisitsByFamilyValidator = validate(
       }
     },
     ['query']
+  )
+)
+
+// Validator cho check availability
+export const checkAvailabilityValidator = validate(
+  checkSchema(
+    {
+      institution_id: {
+        notEmpty: {
+          errorMessage: 'Institution ID is required'
+        },
+        isUUID: {
+          errorMessage: 'Institution ID must be a valid UUID'
+        }
+      },
+      date: {
+        notEmpty: {
+          errorMessage: 'Date is required'
+        },
+        isISO8601: {
+          errorMessage: 'Date must be in ISO 8601 format'
+        }
+      }
+    },
+    ['query']
+  )
+)
+
+// Validator cho check-in
+export const checkInValidator = validate(
+  checkSchema(
+    {
+      qr_code_data: {
+        notEmpty: {
+          errorMessage: 'QR code data is required'
+        },
+        isString: {
+          errorMessage: 'QR code data must be a string'
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+// Validator cho check-out
+export const checkOutValidator = validate(
+  checkSchema(
+    {
+      visit_id: {
+        notEmpty: {
+          errorMessage: 'Visit ID is required'
+        },
+        isUUID: {
+          errorMessage: 'Visit ID must be a valid UUID'
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+// Validator cho cancel visit
+export const cancelVisitValidator = validate(
+  checkSchema(
+    {
+      visit_id: {
+        notEmpty: {
+          errorMessage: 'Visit ID is required'
+        },
+        isUUID: {
+          errorMessage: 'Visit ID must be a valid UUID'
+        }
+      },
+      reason: {
+        optional: true,
+        isString: {
+          errorMessage: 'Reason must be a string'
+        },
+        isLength: {
+          options: {
+            max: 500
+          },
+          errorMessage: 'Reason must be less than 500 characters'
+        }
+      }
+    },
+    ['body']
   )
 )

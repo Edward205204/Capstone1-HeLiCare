@@ -19,9 +19,9 @@ import {
 export const isHandleByAdminOrRootAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (req.decoded_authorization?.role !== UserRole.Admin && req.decoded_authorization?.role !== UserRole.RootAdmin) {
     return next(
-      new ErrorWithStatus({ 
-        message: 'You are not authorized to perform this action. Only Admin and RootAdmin can manage rooms.', 
-        status: HTTP_STATUS.UNAUTHORIZED 
+      new ErrorWithStatus({
+        message: 'You are not authorized to perform this action. Only Admin and RootAdmin can manage rooms.',
+        status: HTTP_STATUS.UNAUTHORIZED
       })
     )
   }

@@ -25,8 +25,10 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/formidable": "^3.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/lodash": "^4.17.20",
+    "@types/minimist": "^1.2.5",
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^7.0.2",
     "eslint": "^9.23.0",
@@ -50,8 +52,13 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
+    "formidable": "^3.5.4",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
-    "nodemailer": "^7.0.9"
+    "minimist": "^1.2.8",
+    "nanoid": "^5.1.6",
+    "nodemailer": "^7.0.9",
+    "sharp": "^0.34.4",
+    "zx": "^8.8.5"
   }
 }

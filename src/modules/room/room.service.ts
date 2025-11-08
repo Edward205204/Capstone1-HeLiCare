@@ -4,7 +4,6 @@ import { HTTP_STATUS } from '~/constants/http_status'
 import { CreateRoomReqBody, UpdateRoomReqBody } from './room.dto'
 
 class RoomService {
-
   // Tạo phòng mới
   createRoom = async (institution_id: string, roomData: CreateRoomReqBody) => {
     const { room_number, type, capacity, notes } = roomData
@@ -127,7 +126,7 @@ class RoomService {
 
       // Cập nhật is_available dựa trên capacity
       const is_available = capacity > room.current_occupancy
-      
+
       const updatedRoom = await prisma.room.update({
         where: { room_id },
         data: {

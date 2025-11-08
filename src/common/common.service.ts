@@ -3,7 +3,6 @@ import { TokenType } from '~/constants/token_type'
 import { prisma } from '~/utils/db'
 
 class CommonService {
-
   checkEmailExist = (email: string): Promise<User | null> => {
     return prisma.user.findUnique({ where: { email } })
   }

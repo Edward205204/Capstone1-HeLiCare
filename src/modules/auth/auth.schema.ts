@@ -149,9 +149,7 @@ export const hireDateSchema: ParamSchema = {
   notEmpty: {
     errorMessage: 'Hire date is required'
   },
-  isDate: {
-    errorMessage: 'Hire date must be a date'
-  },
+
   trim: true
 }
 

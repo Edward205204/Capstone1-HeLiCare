@@ -18,7 +18,7 @@ export interface UpdateVisitReqBody {
 }
 
 export interface ApproveVisitReqBody {
-  status: VisitStatus.approved | VisitStatus.rejected
+  status: 'approved' | 'rejected'
   notes?: string
 }
 
@@ -32,4 +32,72 @@ export interface GetVisitsByFamilyReqQuery {
   status?: VisitStatus
   limit?: number
   offset?: number
+}
+
+// New DTOs for enhanced visit system
+export interface CheckAvailabilityReqQuery {
+  institution_id: string
+  date: string // ISO date string
+}
+
+export interface CheckInReqBody {
+  qr_code_data: string
+}
+
+export interface CheckOutReqBody {
+  visit_id: string
+}
+
+export interface CancelVisitReqBody {
+  visit_id: string
+  reason?: string
+}
+
+export interface VisitAvailabilityResponse {
+  date: string
+  total_visitors: number
+  max_visitors_per_day: number
+  is_day_available: boolean
+  time_slots: {
+    slot_id: string
+    name: string
+    start_time: string
+    end_time: string
+    current_visitors: number
+    max_visitors: number
+    is_available: boolean
+  }[]
+}
+
+export interface CheckInResponse {
+  success: boolean
+  visit: {
+    visit_id: string
+    resident_name: string
+    family_name: string
+    room_number: string
+    check_in_time: Date
+  }
+}
+
+export interface VisitWithQRCode {
+  visit_id: string
+  family_user_id: string
+  resident_id: string
+  institution_id: string
+  visit_date: Date
+  visit_time: string
+  duration: number
+  purpose?: string
+  notes?: string
+  status: VisitStatus
+  qr_code_data: string
+  qr_expires_at: Date
+  time_slot: {
+    name: string
+    start_time: string
+    end_time: string
+  }
+  created_at: Date
+  updated_at: Date
 }

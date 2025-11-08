@@ -1,5 +1,11 @@
 import { PrismaClient, Schedule, ActivityStatus, ScheduleFrequency, ActivityType } from '@prisma/client'
-import { CreateScheduleDto, UpdateScheduleDto, GetSchedulesQueryParams, ScheduleResponse, ScheduleStatistics } from './schedule.dto'
+import {
+  CreateScheduleDto,
+  UpdateScheduleDto,
+  GetSchedulesQueryParams,
+  ScheduleResponse,
+  ScheduleStatistics
+} from './schedule.dto'
 
 const prisma = new PrismaClient()
 
@@ -51,18 +57,18 @@ export class ScheduleService {
     institution_id: string,
     params: GetSchedulesQueryParams = {}
   ): Promise<{ data: ScheduleResponse[]; total: number }> {
-    const { 
-      take = 10, 
-      skip = 0, 
-      resident_id, 
-      staff_id, 
-      activity_id, 
-      status, 
-      start_date, 
-      end_date, 
-      frequency, 
-      is_recurring, 
-      search 
+    const {
+      take = 10,
+      skip = 0,
+      resident_id,
+      staff_id,
+      activity_id,
+      status,
+      start_date,
+      end_date,
+      frequency,
+      is_recurring,
+      search
     } = params
 
     const where: any = {
@@ -245,7 +251,11 @@ export class ScheduleService {
     })
   }
 
-  async getSchedulesByResident(resident_id: string, take = 10, skip = 0): Promise<{ data: ScheduleResponse[]; total: number }> {
+  async getSchedulesByResident(
+    resident_id: string,
+    take = 10,
+    skip = 0
+  ): Promise<{ data: ScheduleResponse[]; total: number }> {
     const [data, total] = await Promise.all([
       prisma.schedule.findMany({
         where: { resident_id },
@@ -293,7 +303,11 @@ export class ScheduleService {
     return { data, total }
   }
 
-  async getSchedulesByStaff(staff_id: string, take = 10, skip = 0): Promise<{ data: ScheduleResponse[]; total: number }> {
+  async getSchedulesByStaff(
+    staff_id: string,
+    take = 10,
+    skip = 0
+  ): Promise<{ data: ScheduleResponse[]; total: number }> {
     const [data, total] = await Promise.all([
       prisma.schedule.findMany({
         where: { staff_id },
@@ -487,7 +501,7 @@ export class ScheduleService {
         count: item._count.frequency
       })),
       schedules_by_activity_type: byActivityType.map((item) => ({
-        activity_type: activityMap.get(item.activity_id) || 'other' as ActivityType,
+        activity_type: activityMap.get(item.activity_id) || ('other' as ActivityType),
         count: item._count.activity_id
       })),
       upcoming_schedules: upcoming

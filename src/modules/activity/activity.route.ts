@@ -9,44 +9,52 @@ import { activityController } from './activity.controller'
 import { checkActivityOwnership, checkActivityExists, checkInstitutionAccess } from './activity.middleware'
 import { accessTokenValidator } from '~/modules/auth/auth.middleware'
 
-const router = Router()
+const activity = Router()
 
-// Apply authentication middleware to all routes
-router.use(accessTokenValidator)
+activity.post('/', accessTokenValidator, checkInstitutionAccess, activityController.createActivity)
 
-// Apply institution access check to all routes
-router.use(checkInstitutionAccess)
+activity.get('/', accessTokenValidator, checkInstitutionAccess, activityController.getActivities)
 
-// POST /api/activities - Create new activity
-router.post('/', activityController.createActivity)
+activity.get('/types', accessTokenValidator, checkInstitutionAccess, activityController.getActivityTypes)
 
-// GET /api/activities - Get all activities with pagination and filters
-router.get('/', activityController.getActivities)
+activity.get('/statistics', accessTokenValidator, checkInstitutionAccess, activityController.getActivityStatistics)
 
-// GET /api/activities/types - Get activity types with counts
-router.get('/types', activityController.getActivityTypes)
+activity.get('/type/:type', accessTokenValidator, checkInstitutionAccess, activityController.getActivitiesByType)
 
-// GET /api/activities/statistics - Get activity statistics
-router.get('/statistics', activityController.getActivityStatistics)
+activity.get(
+  '/:activity_id',
+  accessTokenValidator,
+  checkInstitutionAccess,
+  checkActivityExists,
+  checkActivityOwnership,
+  activityController.getActivityById
+)
 
-// GET /api/activities/type/:type - Get activities by type
-router.get('/type/:type', activityController.getActivitiesByType)
+activity.put(
+  '/:activity_id',
+  accessTokenValidator,
+  checkInstitutionAccess,
+  checkActivityExists,
+  checkActivityOwnership,
+  activityController.updateActivity
+)
 
-// GET /api/activities/:activity_id - Get activity by ID
-router.get('/:activity_id', checkActivityExists, checkActivityOwnership, activityController.getActivityById)
-
-// PUT /api/activities/:activity_id - Update activity
-router.put('/:activity_id', checkActivityExists, checkActivityOwnership, activityController.updateActivity)
-
-// PATCH /api/activities/:activity_id/toggle - Toggle activity status
-router.patch(
+activity.patch(
   '/:activity_id/toggle',
+  accessTokenValidator,
+  checkInstitutionAccess,
   checkActivityExists,
   checkActivityOwnership,
   activityController.toggleActivityStatus
 )
 
-// DELETE /api/activities/:activity_id - Delete activity
-router.delete('/:activity_id', checkActivityExists, checkActivityOwnership, activityController.deleteActivity)
+activity.delete(
+  '/:activity_id',
+  accessTokenValidator,
+  checkInstitutionAccess,
+  checkActivityExists,
+  checkActivityOwnership,
+  activityController.deleteActivity
+)
 
-export default router
+export default activity

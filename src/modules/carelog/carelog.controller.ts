@@ -12,9 +12,9 @@ class CareLogController {
     const staff_id = req.decoded_authorization?.user_id as string
     const institution_id = req.decoded_authorization?.institution_id as string
     const data = req.body as CreateCareLogDto
-    
+
     const careLog = await this.careLogService.createCareLog(staff_id, institution_id, data)
-    
+
     res.status(HTTP_STATUS.CREATED).json({
       message: 'Care log created successfully',
       data: careLog
@@ -25,9 +25,9 @@ class CareLogController {
   getCareLogs = async (req: Request, res: Response) => {
     const institution_id = req.decoded_authorization?.institution_id as string
     const query = req.query as unknown as GetCareLogsQueryParams
-    
+
     const result = await this.careLogService.getCareLogsByInstitution(institution_id, query)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Care logs fetched successfully',
       data: {
@@ -41,16 +41,16 @@ class CareLogController {
 
   getCareLogById = async (req: Request, res: Response) => {
     const { care_log_id } = req.params
-    
+
     const careLog = await this.careLogService.getCareLogById(care_log_id)
-    
+
     if (!careLog) {
       res.status(HTTP_STATUS.NOT_FOUND).json({
         message: 'Care log not found'
       })
       return
     }
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log fetched successfully',
       data: careLog
@@ -60,13 +60,9 @@ class CareLogController {
   getCareLogsByResident = async (req: Request, res: Response) => {
     const { resident_id } = req.params
     const { take, skip } = req.query
-    
-    const result = await this.careLogService.getCareLogsByResident(
-      resident_id,
-      Number(take) || 10,
-      Number(skip) || 0
-    )
-    
+
+    const result = await this.careLogService.getCareLogsByResident(resident_id, Number(take) || 10, Number(skip) || 0)
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Resident care logs fetched successfully',
       data: {
@@ -81,13 +77,9 @@ class CareLogController {
   getCareLogsByStaff = async (req: Request, res: Response) => {
     const { staff_id } = req.params
     const { take, skip } = req.query
-    
-    const result = await this.careLogService.getCareLogsByStaff(
-      staff_id,
-      Number(take) || 10,
-      Number(skip) || 0
-    )
-    
+
+    const result = await this.careLogService.getCareLogsByStaff(staff_id, Number(take) || 10, Number(skip) || 0)
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Staff care logs fetched successfully',
       data: {
@@ -101,9 +93,9 @@ class CareLogController {
 
   getCareLogStatistics = async (req: Request, res: Response) => {
     const institution_id = req.decoded_authorization?.institution_id as string
-    
+
     const statistics = await this.careLogService.getCareLogStatistics(institution_id)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log statistics fetched successfully',
       data: statistics
@@ -114,9 +106,9 @@ class CareLogController {
   updateCareLog = async (req: Request, res: Response) => {
     const { care_log_id } = req.params
     const data = req.body as UpdateCareLogDto
-    
+
     const careLog = await this.careLogService.updateCareLog(care_log_id, data)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log updated successfully',
       data: careLog
@@ -126,16 +118,16 @@ class CareLogController {
   updateCareLogStatus = async (req: Request, res: Response) => {
     const { care_log_id } = req.params
     const { status } = req.body
-    
+
     if (!Object.values(CareTaskStatus).includes(status)) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         message: 'Invalid care log status'
       })
       return
     }
-    
+
     const careLog = await this.careLogService.updateCareLogStatus(care_log_id, status)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log status updated successfully',
       data: careLog
@@ -145,9 +137,9 @@ class CareLogController {
   // DELETE Methods
   deleteCareLog = async (req: Request, res: Response) => {
     const { care_log_id } = req.params
-    
+
     const careLog = await this.careLogService.deleteCareLog(care_log_id)
-    
+
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log deleted successfully',
       data: careLog
