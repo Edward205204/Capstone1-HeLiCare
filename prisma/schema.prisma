@@ -1,4 +1,4 @@
-// This is your Prisma schema file,
+ // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
@@ -82,6 +82,18 @@ enum PaymentStatus {
   paid
   overdue
   pending
+  failed
+  cancelled
+  refunded
+}
+
+enum PaymentTransactionStatus {
+  pending
+  processing
+  completed
+  failed
+  cancelled
+  refunded
 }
 
 enum SpecialCareStatus {
@@ -102,10 +114,7 @@ enum VisitStatus {
   pending
   approved
   rejected
-  scheduled
-  checked_in
   completed
-  cancelled
 }
 
 enum InvitationStatus {
@@ -175,8 +184,10 @@ enum RoomType {
 }
 
 enum PaymentMethod {
-  // cash
-  // bank_transfer
+  COD
+  momo
+  bank_transfer
+  visa
   paypal
 }
 
@@ -258,11 +269,9 @@ model Institution {
   activities Activity[]
   schedules Schedule[]
   careLogs  CareLog[]
-  visitConfiguration VisitConfiguration?
-  visitTimeSlots VisitTimeSlot[]
-  visitDailyStats VisitDailyStats[]
   servicePackages ServicePackage[]
   contracts Contract[]
+  payments Payment[]
 }
 
 model User {
@@ -289,6 +298,7 @@ model User {
   staffSchedules           Schedule[] @relation("StaffSchedules")
   staffCareLogs            CareLog[] @relation("StaffCareLogs")
   familyContracts          Contract[] @relation("FamilyContracts")
+  familyPayments           Payment[] @relation("FamilyPayments")
 }
 
 model StaffProfile {
@@ -562,10 +572,6 @@ model Visit {
   status         VisitStatus @default(pending)
   approved_by    String?    // User ID who approved (Admin/Staff)
   approved_at    DateTime?
-  checked_in_at  DateTime?  // Thời gian check-in
-  checked_out_at DateTime?  // Thời gian check-out
-  qr_code_data   String?    // QR code data (JWT hoặc visit_id)
-  qr_expires_at  DateTime?  // Thời gian hết hạn QR code
   created_at     DateTime   @default(now())
   updated_at     DateTime   @updatedAt
 
@@ -573,181 +579,131 @@ model Visit {
   resident       Resident   @relation(fields: [resident_id], references: [resident_id])
   institution    Institution @relation(fields: [institution_id], references: [institution_id])
   approver       User?      @relation("VisitApprover", fields: [approved_by], references: [user_id])
-  visit_slot     VisitSlot?
 
   @@unique([family_user_id, visit_date, visit_time])
   @@index([visit_date, status])
   @@index([institution_id, visit_date])
-  @@index([qr_code_data])
 }
 
-// Cấu hình thăm viếng cho từng institution
-model VisitConfiguration {
-  config_id       String   @id @default(uuid())
-  institution_id  String   @unique
-  max_visitors_per_day Int @default(100)
-  max_visitors_per_slot Int @default(50)
-  max_visitors_per_resident_per_slot Int @default(3)
-  advance_booking_days Int @default(14) // Số ngày trước có thể đặt lịch
-  cancellation_hours Int @default(2) // Số giờ trước có thể hủy
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  institution     Institution @relation(fields: [institution_id], references: [institution_id])
-}
-
-// Khung giờ thăm viếng
-model VisitTimeSlot {
-  slot_id         String   @id @default(uuid())
-  institution_id  String
-  name           String // VD: "Sáng", "Chiều"
-  start_time      String // Format: "HH:MM"
-  end_time        String // Format: "HH:MM"
-  is_active       Boolean @default(true)
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  institution     Institution @relation(fields: [institution_id], references: [institution_id])
-  visits          VisitSlot[]
-  @@index([institution_id])
-}
-
-// Liên kết Visit với TimeSlot
-model VisitSlot {
-  visit_slot_id   String   @id @default(uuid())
-  visit_id        String   @unique
-  slot_id         String
-  created_at      DateTime @default(now())
-
-  visit           Visit        @relation(fields: [visit_id], references: [visit_id])
-  time_slot       VisitTimeSlot @relation(fields: [slot_id], references: [slot_id])
-}
-
-// Thống kê thăm viếng theo ngày
-model VisitDailyStats {
-  stats_id        String   @id @default(uuid())
-  institution_id  String
-  visit_date      DateTime
-  total_visitors  Int      @default(0)
-  visitors_by_slot Json    // { "slot_id": count }
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  institution     Institution @relation(fields: [institution_id], references: [institution_id])
-
-  @@unique([institution_id, visit_date])
-  @@index([institution_id, visit_date])
-}
-
-// Service Package & Contract Models
+// Service Package Model
 model ServicePackage {
-  package_id      String      @id @default(uuid())
+  package_id      String   @id @default(uuid())
   institution_id  String
   name            String
   description     String?
   type            ServiceType @default(base)
-  
-  // Pricing
   price_monthly   Float
   price_annually  Float?
-  
-  // Room related
   room_type       RoomType?
-  includes_room   Boolean     @default(false)
-  
-  // Service details
-  features        Json?       // Danh sách tính năng
-  max_residents   Int?        // Giới hạn số resident (nếu có)
-  
-  // Status
-  is_active       Boolean     @default(true)
-  created_at      DateTime    @default(now())
-  updated_at      DateTime    @updatedAt
-  
+  includes_room   Boolean  @default(false)
+  features        Json?
+  max_residents   Int?
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
   institution     Institution @relation(fields: [institution_id], references: [institution_id])
   contractServices ContractService[]
-  
   @@index([institution_id, type])
   @@index([is_active])
 }
 
+// Contract Model
 model Contract {
-  contract_id     String        @id @default(uuid())
-  institution_id  String
-  resident_id     String
-  family_user_id  String?
-  
-  // Contract info
-  contract_number String        @unique
-  status          ContractStatus @default(active)
-  
-  // Payment info
+  contract_id       String   @id @default(uuid())
+  institution_id    String
+  resident_id       String
+  family_user_id    String?
+  contract_number   String   @unique
+  status            ContractStatus @default(active)
   payment_frequency PaymentFrequency
-  total_amount    Float
-  
-  // Dates
-  start_date      DateTime
-  end_date        DateTime?
-  signed_date     DateTime?
-  
-  // Room assignment
-  room_id         String?
-  
-  notes           String?
-  created_at      DateTime      @default(now())
-  updated_at      DateTime      @updatedAt
-  
-  institution     Institution   @relation(fields: [institution_id], references: [institution_id])
-  resident        Resident      @relation(fields: [resident_id], references: [resident_id])
-  family_user     User?         @relation("FamilyContracts", fields: [family_user_id], references: [user_id])
-  room            Room?         @relation(fields: [room_id], references: [room_id])
-  contractServices ContractService[]
-  
+  total_amount      Float
+  start_date        DateTime
+  end_date          DateTime?
+  signed_date       DateTime?
+  room_id           String?
+  notes             String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  institution       Institution @relation(fields: [institution_id], references: [institution_id])
+  resident          Resident    @relation(fields: [resident_id], references: [resident_id])
+  family_user       User?       @relation("FamilyContracts", fields: [family_user_id], references: [user_id])
+  room              Room?       @relation(fields: [room_id], references: [room_id])
+  contractServices  ContractService[]
+  payments          Payment[]
   @@index([institution_id, status])
   @@index([resident_id])
   @@index([contract_number])
 }
 
+// Contract Service Model
 model ContractService {
-  contract_service_id String  @id @default(uuid())
+  contract_service_id String   @id @default(uuid())
   contract_id         String
   package_id          String
-  
   status              ContractServiceStatus @default(active)
-  price_at_signing    Float   // Giá tại thời điểm ký
-  
+  price_at_signing    Float
   start_date          DateTime
   end_date            DateTime?
-  
   notes               String?
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
-  
-  contract            Contract        @relation(fields: [contract_id], references: [contract_id])
-  package             ServicePackage  @relation(fields: [package_id], references: [package_id])
-  
+
+  contract            Contract      @relation(fields: [contract_id], references: [contract_id])
+  package             ServicePackage @relation(fields: [package_id], references: [package_id])
   @@index([contract_id])
   @@index([package_id])
   @@index([status])
 }
 
-enum VideoEncodeStatus {
-  pending
-  processing
-  success
-  failed
+// Payment Model
+model Payment {
+  payment_id       String   @id @default(uuid())
+  contract_id      String
+  family_user_id   String
+  institution_id   String
+  amount           Float
+  payment_method   PaymentMethod
+  status           PaymentStatus @default(pending)
+  due_date         DateTime
+  paid_date        DateTime?
+  payment_period_start DateTime
+  payment_period_end   DateTime
+  notes            String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  contract         Contract @relation(fields: [contract_id], references: [contract_id])
+  family_user      User     @relation("FamilyPayments", fields: [family_user_id], references: [user_id])
+  institution      Institution @relation(fields: [institution_id], references: [institution_id])
+  transactions     PaymentTransaction[]
+  @@index([contract_id])
+  @@index([family_user_id])
+  @@index([status])
+  @@index([due_date])
+  @@index([institution_id])
 }
 
-enum MediaType {
-  image
-  video
-  hls
+// Payment Transaction Model (for tracking payment attempts, especially for online payments)
+model PaymentTransaction {
+  transaction_id   String   @id @default(uuid())
+  payment_id       String
+  transaction_code String?  @unique // External transaction code (e.g., Momo transaction ID)
+  payment_method   PaymentMethod
+  amount           Float
+  status           PaymentTransactionStatus @default(pending)
+  gateway_response Json?    // Response from payment gateway
+  gateway_transaction_id String? // Transaction ID from payment gateway
+  error_message    String?
+  completed_at     DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  payment          Payment  @relation(fields: [payment_id], references: [payment_id])
+  @@index([payment_id])
+  @@index([status])
+  @@index([transaction_code])
+  @@index([gateway_transaction_id])
 }
 
-model VideoEncode {
-  video_id String   @id @default(uuid())
-  status VideoEncodeStatus @default(pending)
-  message String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-}
