@@ -10,8 +10,14 @@ import {
 
 class RoomController {
   // Tạo phòng mới
-  createRoom = async (req: Request, res: Response) => {
-    const { institution_id } = req.params
+  createRoom = async (req: Request, res: Response): Promise<void> => {
+    const institution_id = req.user?.institution_id // Lấy từ token
+    if (!institution_id) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        message: 'Institution ID not found in user profile'
+      })
+      return
+    }
     const roomData: CreateRoomReqBody = req.body
 
     const room = await roomService.createRoom(institution_id, roomData)
@@ -22,9 +28,15 @@ class RoomController {
     })
   }
 
-  // Lấy danh sách phòng của institution
-  getRoomsByInstitution = async (req: Request, res: Response) => {
-    const { institution_id } = req.params
+  // Lấy danh sách phòng của institution (từ token)
+  getRoomsByInstitution = async (req: Request, res: Response): Promise<void> => {
+    const institution_id = req.user?.institution_id // Lấy từ token
+    if (!institution_id) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        message: 'Institution ID not found in user profile'
+      })
+      return
+    }
 
     const rooms = await roomService.getRoomsByInstitution(institution_id)
 

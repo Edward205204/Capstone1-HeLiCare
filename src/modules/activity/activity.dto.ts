@@ -18,10 +18,10 @@ export interface UpdateActivityDto {
 }
 
 export interface GetActivitiesQueryParams {
-  take?: number
-  skip?: number
+  take?: number | string
+  skip?: number | string
   type?: ActivityType
-  is_active?: boolean
+  is_active?: boolean | string
   search?: string
 }
 

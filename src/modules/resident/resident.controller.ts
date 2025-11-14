@@ -32,11 +32,15 @@ class ResidentController {
   //   res.status(HTTP_STATUS.OK).json({ message: 'Profile created successfully' })
   // }
 
-  // thực hiện bởi family
+  // thực hiện bởi staff (có thể link với family)
   createResident = async (req: Request, res: Response) => {
     const body = req.body
-    await this.residentService.createResident({ body })
-    res.status(HTTP_STATUS.OK).json({ message: 'Resident created successfully' })
+    // Get institution_id from token if not provided in body
+    if (!body.institution_id && req.decoded_authorization?.institution_id) {
+      body.institution_id = req.decoded_authorization.institution_id
+    }
+    const data = await this.residentService.createResident({ body })
+    res.status(HTTP_STATUS.OK).json({ message: 'Resident created successfully', data })
   }
 
   createApplicant = async (req: Request, res: Response) => {
@@ -89,6 +93,32 @@ class ResidentController {
     const institution_id = req.decoded_authorization?.institution_id as string
     await this.residentService.joinInstitutionByFamily({ resident_id, institution_id })
     res.status(HTTP_STATUS.OK).json({ message: 'Join institution successfully' })
+  }
+
+  updateResident = async (req: Request, res: Response) => {
+    const { resident_id } = req.params
+    const data = await this.residentService.updateResident(resident_id, req.body)
+    res.status(HTTP_STATUS.OK).json({ message: 'Resident updated successfully', data })
+  }
+
+  deleteResident = async (req: Request, res: Response) => {
+    const { resident_id } = req.params
+    await this.residentService.deleteResident(resident_id)
+    res.status(HTTP_STATUS.OK).json({ message: 'Resident deleted successfully' })
+  }
+
+  // Lấy danh sách residents của family user
+  getResidentsByFamily = async (req: Request, res: Response) => {
+    const family_user_id = req.decoded_authorization?.user_id as string
+    const data = await this.residentService.getResidentsByFamily(family_user_id)
+    res.status(HTTP_STATUS.OK).json({ message: 'Residents fetched successfully', data })
+  }
+
+  // Lấy danh sách người thân liên kết với resident
+  getFamilyMembersByResident = async (req: Request, res: Response) => {
+    const { resident_id } = req.params
+    const data = await this.residentService.getFamilyMembersByResident(resident_id)
+    res.status(HTTP_STATUS.OK).json({ message: 'Family members fetched successfully', data })
   }
 }
 

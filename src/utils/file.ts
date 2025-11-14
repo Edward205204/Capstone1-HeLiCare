@@ -1,12 +1,12 @@
 import fs from 'fs'
 import formidable, { File } from 'formidable'
 import { NextFunction, Request, Response } from 'express'
-import { UPLOAD_IMAGES_TEMP_DIR, UPLOAD_VIDEOS_DIR } from '../constants/dir'
+import { UPLOAD_IMAGES_TEMP_DIR, UPLOAD_VIDEOS_DIR, UPLOAD_IMAGES_DIR } from '../constants/dir'
 import path from 'path'
 import { getExtension } from './ultils'
 
 export const initFolder = () => {
-  ;[UPLOAD_IMAGES_TEMP_DIR, UPLOAD_VIDEOS_DIR].forEach((dir) => {
+  ;[UPLOAD_IMAGES_TEMP_DIR, UPLOAD_IMAGES_DIR, UPLOAD_VIDEOS_DIR].forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
@@ -16,10 +16,10 @@ export const initFolder = () => {
 export const handleUploadImage = async (req: Request, res: Response, next: NextFunction) => {
   const form = formidable({
     uploadDir: UPLOAD_IMAGES_TEMP_DIR,
-    maxFiles: 4,
+    maxFiles: 10, // Tăng số lượng file có thể upload
     keepExtensions: true,
-    maxFileSize: 300 * 1024, // 300kb
-    maxTotalFileSize: 300 * 1024 * 4,
+    maxFileSize: 10 * 1024 * 1024, // 10MB per file
+    maxTotalFileSize: 50 * 1024 * 1024, // 50MB total
     filter: function ({ name, originalFilename, mimetype }: formidable.Part): boolean {
       const valid = name === 'image' && Boolean(mimetype && mimetype.includes('image')) // phải là image và có mimetype là image
       if (!valid) {

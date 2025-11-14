@@ -58,7 +58,40 @@ class RoomService {
       }
     })
 
-    return rooms
+    // Tính lại current_occupancy từ số lượng residents thực tế và cập nhật vào database
+    const updatedRooms = await Promise.all(
+      rooms.map(async (room) => {
+        const actualOccupancy = room.residents.length
+        const isAvailable = actualOccupancy < room.capacity
+
+        // Chỉ cập nhật nếu khác với giá trị hiện tại
+        if (room.current_occupancy !== actualOccupancy || room.is_available !== isAvailable) {
+          const updatedRoom = await prisma.room.update({
+            where: { room_id: room.room_id },
+            data: {
+              current_occupancy: actualOccupancy,
+              is_available: isAvailable
+            },
+            include: {
+              residents: {
+                select: {
+                  resident_id: true,
+                  full_name: true,
+                  gender: true,
+                  date_of_birth: true,
+                  admission_date: true
+                }
+              }
+            }
+          })
+          return updatedRoom
+        }
+
+        return room
+      })
+    )
+
+    return updatedRooms
   }
 
   // Lấy thông tin phòng theo ID
@@ -77,6 +110,37 @@ class RoomService {
         }
       }
     })
+
+    if (!room) {
+      return null
+    }
+
+    // Tính lại current_occupancy từ số lượng residents thực tế và cập nhật vào database
+    const actualOccupancy = room.residents.length
+    const isAvailable = actualOccupancy < room.capacity
+
+    // Chỉ cập nhật nếu khác với giá trị hiện tại
+    if (room.current_occupancy !== actualOccupancy || room.is_available !== isAvailable) {
+      const updatedRoom = await prisma.room.update({
+        where: { room_id },
+        data: {
+          current_occupancy: actualOccupancy,
+          is_available: isAvailable
+        },
+        include: {
+          residents: {
+            select: {
+              resident_id: true,
+              full_name: true,
+              gender: true,
+              date_of_birth: true,
+              admission_date: true
+            }
+          }
+        }
+      })
+      return updatedRoom
+    }
 
     return room
   }

@@ -1,15 +1,8 @@
 import { $Enums, FamilyLinkStatus, User, UserRole, UserStatus } from '@prisma/client'
-import { randomBytes } from 'crypto'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { TokenType } from '~/constants/token_type'
 import { ErrorWithStatus } from '~/models/error'
-import {
-  AccessTokenPayload,
-  CreateStaffForInstitutionDto,
-  RefreshTokenPayload,
-  RegisterDto,
-  TokenPayload
-} from '~/modules/auth/auth.dto'
+import { AccessTokenPayload, RefreshTokenPayload, RegisterDto, TokenPayload } from '~/modules/auth/auth.dto'
 import { prisma } from '~/utils/db'
 import { env } from '~/utils/dot.env'
 import { hashPassword } from '~/utils/hash'
@@ -76,6 +69,15 @@ class AuthService {
 
     const { exp } = await this.decodeRefreshToken(refresh_token)
 
+    // Xóa refresh token cũ của user trước khi tạo mới để tránh unique constraint error
+    await prisma.userToken.deleteMany({
+      where: {
+        user_id,
+        token_type: TokenType.RefreshToken
+      }
+    })
+
+    // Tạo refresh token mới sau khi đã xóa token cũ
     await prisma.userToken.create({
       data: {
         user_id,
@@ -85,9 +87,38 @@ class AuthService {
       }
     })
 
+    // Lấy full thông tin user để trả về
+    const user = await prisma.user.findUnique({
+      where: { user_id },
+      select: {
+        user_id: true,
+        email: true,
+        role: true,
+        status: true,
+        institution_id: true,
+        created_at: true,
+        familyProfile: {
+          select: {
+            full_name: true,
+            phone: true,
+            address: true
+          }
+        },
+        staffProfile: {
+          select: {
+            full_name: true,
+            phone: true,
+            position: true,
+            hire_date: true
+          }
+        }
+      }
+    })
+
     return {
       access_token,
-      refresh_token
+      refresh_token,
+      user
     }
   }
 
@@ -111,13 +142,15 @@ class AuthService {
     token_type,
     role,
     status,
-    institution_id
+    institution_id,
+    email
   }: {
     user_id: string
     token_type: $Enums.TokenType
     role: UserRole
     status: UserStatus
     institution_id: string | null
+    email?: string
   }): Promise<string> => {
     // Xoá token cũ nếu tồn tại và Tạo token mới
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -133,7 +166,8 @@ class AuthService {
         token_type: token_type,
         role,
         status,
-        institution_id
+        institution_id,
+        email
       })
     ])
 
@@ -168,12 +202,18 @@ class AuthService {
     email_to: string
     subject: string
   }) => {
+    const user = await prisma.user.findUnique({
+      where: { user_id },
+      select: { email: true }
+    })
+
     const token = await this.generateAndSaveToken({
       user_id,
       token_type: token_type,
       role,
       status,
-      institution_id
+      institution_id,
+      email: user?.email
     })
 
     transporter
@@ -309,42 +349,6 @@ class AuthService {
     }
   }
 
-  createStaffForInstitution = async (data: CreateStaffForInstitutionDto) => {
-    const password = randomBytes(12).toString('hex')
-    const { password: hashedPassword } = await hashPassword(password)
-    const user = await prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashedPassword,
-        status: UserStatus.inactive,
-        institution_id: data.institution_id,
-        role: UserRole.Staff
-      }
-    })
-
-    await prisma.staffProfile.create({
-      data: {
-        user_id: user.user_id,
-        institution_id: data.institution_id,
-        full_name: data.full_name,
-        phone: data.phone,
-        hire_date: data.hire_date,
-        notes: data.notes,
-        position: data.position
-      }
-    })
-
-    await this.sendTokenToUserEmail({
-      user_id: user.user_id,
-      token_type: TokenType.StaffInviteToken,
-      role: UserRole.Staff,
-      status: UserStatus.inactive,
-      institution_id: data.institution_id,
-      email_to: user.email,
-      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
-    })
-  }
-
   renewInviteTokenForAllMemberOfInstitution = async (user: User) => {
     let token_type: $Enums.TokenType | undefined
     if (user.role === UserRole.RootAdmin || user.role === UserRole.Admin) {
@@ -365,105 +369,6 @@ class AuthService {
       subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
     })
   }
-
-  verifyInviteTokenAndResetPassword = async ({
-    email,
-    password,
-    token_string
-  }: {
-    email: string
-    password: string
-    token_string: string
-  }) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [{ password: hashedPassword }, _] = await Promise.all([
-      hashPassword(password),
-      prisma.userToken.delete({
-        where: { token_string }
-      })
-    ])
-
-    await prisma.user.update({
-      where: { email },
-      data: { status: UserStatus.active, password: hashedPassword }
-    })
-  }
-
-  createRootAdmin = async ({ email, institution_id }: { email: string; institution_id: string }) => {
-    const password = randomBytes(12).toString('hex')
-    const { password: hashedPassword } = await hashPassword(password)
-    const user = await prisma.user.create({
-      data: { email, password: hashedPassword, role: UserRole.RootAdmin, institution_id }
-    })
-
-    await this.sendTokenToUserEmail({
-      user_id: user.user_id,
-      token_type: TokenType.AdminInviteToken,
-      role: UserRole.RootAdmin,
-      status: UserStatus.inactive,
-      institution_id: institution_id,
-      email_to: email,
-      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
-    })
-  }
-
-  createAdmin = async ({ email, institution_id }: { email: string; institution_id: string }) => {
-    const password = randomBytes(12).toString('hex')
-    const { password: hashedPassword } = await hashPassword(password)
-    const user = await prisma.user.create({
-      data: { email, password: hashedPassword, role: UserRole.Admin, institution_id, status: UserStatus.inactive }
-    })
-
-    await this.sendTokenToUserEmail({
-      user_id: user.user_id,
-      token_type: TokenType.AdminInviteToken,
-      role: UserRole.Admin,
-      status: UserStatus.inactive,
-      institution_id: institution_id,
-      email_to: email,
-      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để truy cập vào hệ thống`
-    })
-  }
-
-  // sendFamilyLink = async ({
-  //   sender_user_id,
-  //   resident_id,
-  //   family_email
-  // }: {
-  //   sender_user_id: string
-  //   resident_id: string
-  //   family_email: string
-  // }) => {
-  //   const [sender, resident, familyUser] = await Promise.all([
-  //     prisma.user.findUnique({ where: { user_id: sender_user_id } }),
-  //     prisma.resident.findUnique({ where: { resident_id } }),
-  //     prisma.user.findUnique({ where: { email: family_email } })
-  //   ])
-
-  //   if (!sender || !resident || !familyUser) return
-
-  //   // tạo token và gửi email
-  //   await this.sendTokenToUserEmail({
-  //     user_id: familyUser.user_id,
-  //     token_type: TokenType.FamilyLinkToken as unknown as $Enums.TokenType,
-  //     role: familyUser.role,
-  //     status: familyUser.status,
-  //     institution_id: resident.institution_id,
-  //     email_to: familyUser.email,
-  //     subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với ${resident.full_name}`
-  //   })
-
-  //   await prisma.familyResidentLink.upsert({
-  //     where: { family_user_id_resident_id: { family_user_id: familyUser.user_id, resident_id } },
-  //     update: { status: 'pending' },
-  //     create: { family_user_id: familyUser.user_id, resident_id, status: 'pending' }
-  //   })
-
-  //   // TODO: tích hợp dịch vụ email, tạm thời log link
-  //   // const baseUrl = env.APP_URL || 'http://localhost:3000'
-  //   // const link = `${baseUrl}/verify-family-link?token=${encodeURIComponent(token)}`
-  //   // console.log('Family link URL:', link)
-  // }
 
   validateFamilyLinkToken = async (token_string: string) => {
     const decoded = await this.decodeCommonToken(token_string)
@@ -524,6 +429,54 @@ class AuthService {
       email_to: familyUser.email,
       subject: `Vui lòng nhấn vào đường link bên dưới để kết nối với người thân`
     })
+  }
+
+  checkUserByEmail = async (email: string) => {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        user_id: true,
+        email: true,
+        role: true,
+        status: true,
+        familyProfile: {
+          select: {
+            full_name: true,
+            phone: true
+          }
+        }
+      }
+    })
+
+    if (!user) {
+      throw new ErrorWithStatus({
+        message: 'User not found with this email',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (user.role !== UserRole.Family) {
+      throw new ErrorWithStatus({
+        message: 'User is not a Family member',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (user.status !== UserStatus.active) {
+      throw new ErrorWithStatus({
+        message: 'User account is not active. Please verify email first.',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    return {
+      user_id: user.user_id,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      family_name: user.familyProfile?.full_name || null,
+      family_phone: user.familyProfile?.phone || null
+    }
   }
 }
 

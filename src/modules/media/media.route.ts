@@ -18,4 +18,7 @@ mediasRouter.post(
 
 mediasRouter.get('/video-encodes-status/:id', wrapRequestHandler(mediaController.getVideoEncodesStatusController))
 
+// Serve static images
+mediasRouter.get('/static/images/:name', wrapRequestHandler(mediaController.serveStaticImageController))
+
 export default mediasRouter

@@ -1,4 +1,3 @@
-import { StaffPosition } from '@prisma/client'
 import { ParamSchema } from 'express-validator'
 import capitalize from 'lodash/capitalize'
 import { JsonWebTokenError } from 'jsonwebtoken'
@@ -121,20 +120,6 @@ export const fullNameSchema: ParamSchema = {
   trim: true
 }
 
-export const phoneSchema: ParamSchema = {
-  notEmpty: {
-    errorMessage: 'Phone is required'
-  },
-  isString: {
-    errorMessage: 'Phone must be a string'
-  },
-  matches: {
-    options: /^0[0-9]{9}$/,
-    errorMessage: 'Phone must be a valid phone number'
-  },
-  trim: true
-}
-
 export const businessIdSchema: ParamSchema = {
   notEmpty: {
     errorMessage: 'Business ID is required'
@@ -143,41 +128,6 @@ export const businessIdSchema: ParamSchema = {
     errorMessage: 'Business ID must be a string'
   },
   trim: true
-}
-
-export const hireDateSchema: ParamSchema = {
-  notEmpty: {
-    errorMessage: 'Hire date is required'
-  },
-
-  trim: true
-}
-
-export const notesSchema: ParamSchema = {
-  isString: {
-    errorMessage: 'Notes must be a string'
-  },
-  trim: true
-}
-
-export const positionSchema: ParamSchema = {
-  notEmpty: {
-    errorMessage: 'Position is required'
-  },
-  isIn: {
-    options: [
-      [
-        StaffPosition.NURSE,
-        StaffPosition.CAREGIVER,
-        StaffPosition.THERAPIST,
-        StaffPosition.PHYSICIAN,
-        StaffPosition.SOCIAL_WORKER,
-        StaffPosition.ACTIVITY_COORDINATOR,
-        StaffPosition.DIETITIAN,
-        StaffPosition.OTHER
-      ]
-    ]
-  }
 }
 
 export const residentIdSchema: ParamSchema = {

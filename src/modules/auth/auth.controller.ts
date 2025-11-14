@@ -3,7 +3,7 @@ import { Request, Response } from 'express'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { AuthService, authService as authServiceInstance } from './auth.service'
 import { User, UserStatus } from '@prisma/client'
-import { AccessTokenPayload, CreateStaffForInstitutionDto, EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
+import { EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
 
 class AuthController {
   constructor(
@@ -110,39 +110,6 @@ class AuthController {
     return
   }
 
-  createStaffForInstitution = async (req: Request, res: Response) => {
-    await this.authService.createStaffForInstitution(req.body as CreateStaffForInstitutionDto)
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Create staff for institution successfully'
-    })
-  }
-
-  verifyStaffInviteAndResetPassword = async (req: Request, res: Response) => {
-    const token_string = req.body.staff_invite_token
-    const { email, password } = req.body
-    await this.authService.verifyInviteTokenAndResetPassword({ email, password, token_string })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Verify staff invite successfully'
-    })
-  }
-
-  createRootAdmin = async (req: Request, res: Response) => {
-    const { email, institution_id } = req.body
-    await this.authService.createRootAdmin({ email, institution_id })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Create root admin successfully'
-    })
-  }
-
-  verifyRootAdminInviteAndResetPassword = async (req: Request, res: Response) => {
-    const token_string = req.body.root_admin_invite_token
-    const { email, password } = req.body
-    await this.authService.verifyInviteTokenAndResetPassword({ email, password, token_string })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Verify root admin invite successfully'
-    })
-  }
-
   renewInviteTokenForAllMemberOfInstitution = async (req: Request, res: Response) => {
     const user = req.user as User
     await this.authService.renewInviteTokenForAllMemberOfInstitution(user)
@@ -150,50 +117,6 @@ class AuthController {
       message: 'Renew token successfully'
     })
   }
-
-  createAdmin = async (req: Request, res: Response) => {
-    const { email } = req.body
-    const institution_id = (req.decoded_authorization as AccessTokenPayload).institution_id as string
-    await this.authService.createAdmin({ email, institution_id })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Create admin successfully'
-    })
-  }
-
-  verifyAdminInviteAndResetPassword = async (req: Request, res: Response) => {
-    const token_string = req.body.admin_invite_token
-    const { email, password } = req.body
-    await this.authService.verifyInviteTokenAndResetPassword({ email, password, token_string })
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Verify admin invite successfully'
-    })
-  }
-
-  // connectResidentWithFamily = async (req: Request, res: Response) => {
-  //   const { resident_id, family_email } = req.body
-  //   const sender = req.user as User
-  //   await this.authService.sendFamilyLink({
-  //     sender_user_id: sender.user_id,
-  //     resident_id,
-  //     family_email
-  //   })
-  //   res.status(HTTP_STATUS.OK).json({
-  //     message: 'Send family link successfully'
-  //   })
-  // }
-
-  // sendFamilyLink = async (req: Request, res: Response) => {
-  //   const { resident_id, family_email } = req.body
-  //   const sender = req.user as User
-  //   await this.authService.sendFamilyLink({
-  //     sender_user_id: sender.user_id,
-  //     resident_id,
-  //     family_email
-  //   })
-  //   res.status(HTTP_STATUS.OK).json({
-  //     message: 'Send family link successfully'
-  //   })
-  // }
 
   validateFamilyLinkToken = async (req: Request, res: Response) => {
     const token_string = req.query.family_link_token as string
@@ -217,6 +140,15 @@ class AuthController {
     await this.authService.resendFamilyLink(family_user_id)
     res.status(HTTP_STATUS.OK).json({
       message: 'Resend family link successfully'
+    })
+  }
+
+  checkUserByEmail = async (req: Request, res: Response) => {
+    const { email } = req.query
+    const data = await this.authService.checkUserByEmail(email as string)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'User found',
+      data
     })
   }
 }

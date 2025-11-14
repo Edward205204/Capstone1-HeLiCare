@@ -16,36 +16,37 @@ const roomRouter = Router()
 // Tất cả routes đều cần access token
 roomRouter.use(accessTokenValidator)
 
-// Tất cả routes đều cần quyền admin hoặc rootadmin
-roomRouter.use(isHandleByAdminOrRootAdmin)
-
 // Routes cho quản lý phòng
-roomRouter.post(
-  '/institutions/:institution_id/rooms',
-  institutionIdValidator,
-  createRoomValidator,
-  roomController.createRoom
-)
-roomRouter.get('/institutions/:institution_id/rooms', institutionIdValidator, roomController.getRoomsByInstitution)
+// Get rooms - staff cũng có thể access (lấy rooms của institution từ token)
+roomRouter.get('/rooms', roomController.getRoomsByInstitution) // Lấy institution_id từ req.user
 roomRouter.get('/rooms/:room_id', roomIdValidator, roomController.getRoomById)
-roomRouter.patch('/rooms/:room_id', roomIdValidator, updateRoomValidator, roomController.updateRoom)
-roomRouter.delete('/rooms/:room_id', roomIdValidator, roomController.deleteRoom)
+roomRouter.get('/rooms/:room_id/residents', roomIdValidator, roomController.getResidentsInRoom)
 
-// Routes cho quản lý resident trong phòng
+// Create/Update/Delete - chỉ admin
+roomRouter.post('/rooms', createRoomValidator, isHandleByAdminOrRootAdmin, roomController.createRoom)
+roomRouter.patch(
+  '/rooms/:room_id',
+  roomIdValidator,
+  updateRoomValidator,
+  isHandleByAdminOrRootAdmin,
+  roomController.updateRoom
+)
+roomRouter.delete('/rooms/:room_id', roomIdValidator, isHandleByAdminOrRootAdmin, roomController.deleteRoom)
+
+// Routes cho quản lý resident trong phòng - chỉ admin
 roomRouter.post(
-  '/institutions/:institution_id/rooms/:room_id/residents',
-  institutionIdValidator,
+  '/rooms/:room_id/residents',
   roomIdValidator,
   addResidentToRoomValidator,
+  isHandleByAdminOrRootAdmin,
   roomController.addResidentToRoom
 )
 roomRouter.delete(
-  '/institutions/:institution_id/rooms/:room_id/residents',
-  institutionIdValidator,
+  '/rooms/:room_id/residents',
   roomIdValidator,
   removeResidentFromRoomValidator,
+  isHandleByAdminOrRootAdmin,
   roomController.removeResidentFromRoom
 )
-roomRouter.get('/rooms/:room_id/residents', roomIdValidator, roomController.getResidentsInRoom)
 
 export default roomRouter

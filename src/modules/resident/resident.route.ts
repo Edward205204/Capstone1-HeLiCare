@@ -70,4 +70,38 @@ residentRouter.post(
   wrapRequestHandler(residentController.joinInstitution)
 )
 
+// update resident
+residentRouter.put(
+  '/update-resident/:resident_id',
+  accessTokenValidator,
+  residentIdValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.updateResident)
+)
+
+// delete resident
+residentRouter.delete(
+  '/delete-resident/:resident_id',
+  accessTokenValidator,
+  residentIdValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.deleteResident)
+)
+
+// Lấy danh sách residents của family user (không cần isHandleByStaffValidator)
+residentRouter.get(
+  '/get-residents-by-family',
+  accessTokenValidator,
+  wrapRequestHandler(residentController.getResidentsByFamily)
+)
+
+// Lấy danh sách người thân liên kết với resident
+residentRouter.get(
+  '/get-family-members-by-resident/:resident_id',
+  accessTokenValidator,
+  residentIdValidator,
+  isHandleByStaffValidator,
+  wrapRequestHandler(residentController.getFamilyMembersByResident)
+)
+
 export default residentRouter

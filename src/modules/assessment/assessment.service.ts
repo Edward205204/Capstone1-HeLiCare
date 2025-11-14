@@ -34,8 +34,17 @@ class AssessmentService {
         assessed_by: {
           select: {
             user_id: true,
-            full_name: true,
-            email: true
+            email: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            },
+            familyProfile: {
+              select: {
+                full_name: true
+              }
+            }
           }
         }
       },
@@ -43,7 +52,18 @@ class AssessmentService {
       skip,
       orderBy: { created_at: 'desc' }
     })
-    return assessments
+
+    // Format assessed_by để có full_name
+    return assessments.map((assessment) => ({
+      ...assessment,
+      assessed_by: {
+        ...assessment.assessed_by,
+        full_name:
+          assessment.assessed_by.staffProfile?.full_name ||
+          assessment.assessed_by.familyProfile?.full_name ||
+          assessment.assessed_by.email
+      }
+    }))
   }
 
   getAssessmentById = async (assessment_id: string) => {
@@ -62,13 +82,34 @@ class AssessmentService {
         assessed_by: {
           select: {
             user_id: true,
-            full_name: true,
-            email: true
+            email: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            },
+            familyProfile: {
+              select: {
+                full_name: true
+              }
+            }
           }
         }
       }
     })
-    return assessment
+
+    if (!assessment) return null
+
+    return {
+      ...assessment,
+      assessed_by: {
+        ...assessment.assessed_by,
+        full_name:
+          assessment.assessed_by.staffProfile?.full_name ||
+          assessment.assessed_by.familyProfile?.full_name ||
+          assessment.assessed_by.email
+      }
+    }
   }
 
   getAssessmentsByResident = async ({ resident_id, take, skip }: GetAssessmentsByResidentParams) => {
@@ -78,8 +119,17 @@ class AssessmentService {
         assessed_by: {
           select: {
             user_id: true,
-            full_name: true,
-            email: true
+            email: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            },
+            familyProfile: {
+              select: {
+                full_name: true
+              }
+            }
           }
         }
       },
@@ -87,7 +137,18 @@ class AssessmentService {
       skip,
       orderBy: { created_at: 'desc' }
     })
-    return assessments
+
+    // Format assessed_by để có full_name
+    return assessments.map((assessment) => ({
+      ...assessment,
+      assessed_by: {
+        ...assessment.assessed_by,
+        full_name:
+          assessment.assessed_by.staffProfile?.full_name ||
+          assessment.assessed_by.familyProfile?.full_name ||
+          assessment.assessed_by.email
+      }
+    }))
   }
 
   getAssessmentsHistory = async ({ institution_id, take, skip }: GetAssessmentsHistoryParams) => {
@@ -109,8 +170,17 @@ class AssessmentService {
         assessed_by: {
           select: {
             user_id: true,
-            full_name: true,
-            email: true
+            email: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            },
+            familyProfile: {
+              select: {
+                full_name: true
+              }
+            }
           }
         }
       },
@@ -118,7 +188,18 @@ class AssessmentService {
       skip,
       orderBy: { created_at: 'desc' }
     })
-    return assessments
+
+    // Format assessed_by để có full_name
+    return assessments.map((assessment) => ({
+      ...assessment,
+      assessed_by: {
+        ...assessment.assessed_by,
+        full_name:
+          assessment.assessed_by.staffProfile?.full_name ||
+          assessment.assessed_by.familyProfile?.full_name ||
+          assessment.assessed_by.email
+      }
+    }))
   }
 
   getAssessmentsQuery = async (params: GetAssessmentQueryParams) => {
@@ -180,7 +261,7 @@ class AssessmentService {
       where.created_at = { lte: new Date(end_date) }
     }
 
-    const data = await prisma.healthAssessment.findMany({
+    const assessments = await prisma.healthAssessment.findMany({
       where,
       include: {
         resident: {
@@ -194,8 +275,17 @@ class AssessmentService {
         assessed_by: {
           select: {
             user_id: true,
-            full_name: true,
-            email: true
+            email: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            },
+            familyProfile: {
+              select: {
+                full_name: true
+              }
+            }
           }
         }
       },
@@ -203,6 +293,18 @@ class AssessmentService {
       skip,
       orderBy: { created_at: 'desc' }
     })
+
+    // Format assessed_by để có full_name
+    const data = assessments.map((assessment) => ({
+      ...assessment,
+      assessed_by: {
+        ...assessment.assessed_by,
+        full_name:
+          assessment.assessed_by.staffProfile?.full_name ||
+          assessment.assessed_by.familyProfile?.full_name ||
+          assessment.assessed_by.email
+      }
+    }))
 
     const total = await prisma.healthAssessment.count({ where })
 
@@ -226,6 +328,7 @@ class AssessmentService {
       notes
     } = assessment
 
+    // Nếu có height/weight, update vào Resident (vì chỉ nhập một lần)
     // Calculate BMI if weight and height are provided
     let calculatedBMI = bmi
     if (weight_kg && height_cm && !bmi) {
@@ -233,15 +336,26 @@ class AssessmentService {
       calculatedBMI = weight_kg / (heightInMeters * heightInMeters)
     }
 
+    // Update height/weight vào Resident nếu có
+    if (weight_kg || height_cm || calculatedBMI) {
+      await prisma.resident.update({
+        where: { resident_id },
+        data: {
+          ...(weight_kg && { weight_kg }),
+          ...(height_cm && { height_cm }),
+          ...(calculatedBMI && { bmi: calculatedBMI })
+        }
+      })
+    }
+
+    // Tạo assessment KHÔNG lưu height/weight/bmi (chỉ lưu vital signs định kỳ)
     const newAssessment = await prisma.healthAssessment.create({
       data: {
         resident_id,
         assessed_by_id,
         cognitive_status: cognitive_status as any,
         mobility_status: mobility_status as any,
-        weight_kg,
-        height_cm,
-        bmi: calculatedBMI,
+        // Không lưu weight_kg, height_cm, bmi vào assessment nữa
         temperature_c,
         blood_pressure_systolic,
         blood_pressure_diastolic,
@@ -272,21 +386,42 @@ class AssessmentService {
       notes
     } = assessment
 
-    // Calculate BMI if weight and height are provided
+    // Lấy resident_id từ assessment hiện tại
+    const currentAssessment = await prisma.healthAssessment.findUnique({
+      where: { assessment_id },
+      select: { resident_id: true }
+    })
+
+    if (!currentAssessment) {
+      throw new Error('Assessment not found')
+    }
+
+    // Nếu có height/weight, update vào Resident (vì chỉ nhập một lần)
     let calculatedBMI = bmi
     if (weight_kg && height_cm && !bmi) {
       const heightInMeters = height_cm / 100
       calculatedBMI = weight_kg / (heightInMeters * heightInMeters)
     }
 
+    // Update height/weight vào Resident nếu có
+    if (weight_kg || height_cm || calculatedBMI) {
+      await prisma.resident.update({
+        where: { resident_id: currentAssessment.resident_id },
+        data: {
+          ...(weight_kg && { weight_kg }),
+          ...(height_cm && { height_cm }),
+          ...(calculatedBMI && { bmi: calculatedBMI })
+        }
+      })
+    }
+
+    // Update assessment KHÔNG lưu height/weight/bmi (chỉ lưu vital signs định kỳ)
     const updatedAssessment = await prisma.healthAssessment.update({
       where: { assessment_id },
       data: {
         cognitive_status: cognitive_status as any,
         mobility_status: mobility_status as any,
-        weight_kg,
-        height_cm,
-        bmi: calculatedBMI,
+        // Không lưu weight_kg, height_cm, bmi vào assessment nữa
         temperature_c,
         blood_pressure_systolic,
         blood_pressure_diastolic,

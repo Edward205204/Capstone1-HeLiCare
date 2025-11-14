@@ -17,7 +17,21 @@ export class ActivityService {
     institution_id: string,
     params: GetActivitiesQueryParams = {}
   ): Promise<{ data: Activity[]; total: number }> {
-    const { take = 10, skip = 0, type, is_active, search } = params
+    // Convert query params to proper types (query params come as strings from URL)
+    const take = typeof params.take === 'string' ? parseInt(params.take, 10) : (params.take ?? 10)
+    const skip = typeof params.skip === 'string' ? parseInt(params.skip, 10) : (params.skip ?? 0)
+    const { type, search } = params
+
+    // Convert is_active from string to boolean if needed
+    let is_active: boolean | undefined = undefined
+    if (params.is_active !== undefined) {
+      if (typeof params.is_active === 'string') {
+        // Convert string "true"/"false" to boolean
+        is_active = params.is_active.toLowerCase() === 'true'
+      } else {
+        is_active = params.is_active
+      }
+    }
 
     const where: any = {
       institution_id

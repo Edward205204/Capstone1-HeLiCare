@@ -1,4 +1,4 @@
-import { StaffPosition, UserRole, UserStatus } from '@prisma/client'
+import { UserRole, UserStatus } from '@prisma/client'
 import { JwtPayload } from 'jsonwebtoken'
 import { TokenType } from '~/constants/token_type'
 
@@ -8,6 +8,7 @@ export interface TokenPayload extends JwtPayload {
   institution_id: string | null
   status: UserStatus
   role: UserRole
+  email?: string
 }
 
 export interface AccessTokenPayload extends TokenPayload {
@@ -47,14 +48,4 @@ export interface RegisterDto {
   password: string
   confirm_password: string
   role: UserRole
-}
-
-export interface CreateStaffForInstitutionDto {
-  email: string
-  full_name: string
-  phone: string
-  hire_date: string
-  notes: string
-  institution_id: string
-  position: StaffPosition
 }
