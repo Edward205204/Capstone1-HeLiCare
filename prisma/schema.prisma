@@ -1,4 +1,4 @@
- // This is your Prisma schema file,
+// This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
@@ -79,21 +79,13 @@ enum PaymentFrequency {
 }
 
 enum PaymentStatus {
-  paid
-  overdue
-  pending
-  failed
-  cancelled
-  refunded
-}
-
-enum PaymentTransactionStatus {
-  pending
-  processing
-  completed
-  failed
-  cancelled
-  refunded
+  pending     // Đang chờ thanh toán
+  processing  // Đang xử lý
+  paid        // Đã thanh toán
+  failed      // Thanh toán thất bại
+  cancelled   // Đã hủy
+  refunded    // Đã hoàn tiền
+  overdue     // Quá hạn thanh toán
 }
 
 enum SpecialCareStatus {
@@ -184,11 +176,10 @@ enum RoomType {
 }
 
 enum PaymentMethod {
-  COD
-  momo
-  bank_transfer
-  visa
-  paypal
+  COD           // Cash on Delivery
+  paypal        // PayPal e-wallet
+  bank_transfer // Chuyển khoản ngân hàng
+  visa          // Thẻ Visa
 }
 
 
@@ -269,9 +260,6 @@ model Institution {
   activities Activity[]
   schedules Schedule[]
   careLogs  CareLog[]
-  servicePackages ServicePackage[]
-  contracts Contract[]
-  payments Payment[]
 }
 
 model User {
@@ -367,7 +355,6 @@ model Resident {
   healthAssessments HealthAssessment[]
   schedules Schedule[]
   careLogs CareLog[]
-  contracts Contract[]
 }
 
 model HealthAssessment {
@@ -438,7 +425,6 @@ model Room {
 
   institution Institution @relation(fields: [institution_id], references: [institution_id])
   residents   Resident[]
-  contracts   Contract[]
 }
 
 model FamilyResidentLink {
@@ -587,7 +573,7 @@ model Visit {
 
 // Service Package Model
 model ServicePackage {
-  package_id      String   @id @default(uuid())
+  package_id      String      @id @default(uuid())
   institution_id  String
   name            String
   description     String?
@@ -595,27 +581,29 @@ model ServicePackage {
   price_monthly   Float
   price_annually  Float?
   room_type       RoomType?
-  includes_room   Boolean  @default(false)
+  includes_room   Boolean     @default(false)
   features        Json?
   max_residents   Int?
-  is_active       Boolean  @default(true)
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  is_active       Boolean     @default(true)
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
 
   institution     Institution @relation(fields: [institution_id], references: [institution_id])
   contractServices ContractService[]
+  paymentItems    PaymentItem[]
+
   @@index([institution_id, type])
   @@index([is_active])
 }
 
 // Contract Model
 model Contract {
-  contract_id       String   @id @default(uuid())
+  contract_id       String            @id @default(uuid())
   institution_id    String
   resident_id       String
   family_user_id    String?
-  contract_number   String   @unique
-  status            ContractStatus @default(active)
+  contract_number   String            @unique
+  status            ContractStatus    @default(active)
   payment_frequency PaymentFrequency
   total_amount      Float
   start_date        DateTime
@@ -623,15 +611,16 @@ model Contract {
   signed_date       DateTime?
   room_id           String?
   notes             String?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
 
-  institution       Institution @relation(fields: [institution_id], references: [institution_id])
-  resident          Resident    @relation(fields: [resident_id], references: [resident_id])
-  family_user       User?       @relation("FamilyContracts", fields: [family_user_id], references: [user_id])
-  room              Room?       @relation(fields: [room_id], references: [room_id])
+  institution       Institution       @relation(fields: [institution_id], references: [institution_id])
+  resident          Resident          @relation(fields: [resident_id], references: [resident_id])
+  family_user       User?             @relation("FamilyContracts", fields: [family_user_id], references: [user_id])
+  room              Room?             @relation(fields: [room_id], references: [room_id])
   contractServices  ContractService[]
   payments          Payment[]
+
   @@index([institution_id, status])
   @@index([resident_id])
   @@index([contract_number])
@@ -639,7 +628,7 @@ model Contract {
 
 // Contract Service Model
 model ContractService {
-  contract_service_id String   @id @default(uuid())
+  contract_service_id String                @id @default(uuid())
   contract_id         String
   package_id          String
   status              ContractServiceStatus @default(active)
@@ -647,11 +636,12 @@ model ContractService {
   start_date          DateTime
   end_date            DateTime?
   notes               String?
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
 
-  contract            Contract      @relation(fields: [contract_id], references: [contract_id])
-  package             ServicePackage @relation(fields: [package_id], references: [package_id])
+  contract            Contract              @relation(fields: [contract_id], references: [contract_id])
+  package             ServicePackage        @relation(fields: [package_id], references: [package_id])
+
   @@index([contract_id])
   @@index([package_id])
   @@index([status])
@@ -659,51 +649,61 @@ model ContractService {
 
 // Payment Model
 model Payment {
-  payment_id       String   @id @default(uuid())
-  contract_id      String
-  family_user_id   String
-  institution_id   String
-  amount           Float
-  payment_method   PaymentMethod
-  status           PaymentStatus @default(pending)
-  due_date         DateTime
-  paid_date        DateTime?
-  payment_period_start DateTime
-  payment_period_end   DateTime
-  notes            String?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  payment_id        String        @id @default(uuid())
+  contract_id       String
+  family_user_id    String
+  institution_id    String
+  payment_number    String        @unique
+  amount            Float
+  method            PaymentMethod
+  status            PaymentStatus @default(pending)
+  due_date          DateTime
+  paid_at           DateTime?
+  payment_reference String?       // Mã tham chiếu từ gateway (PayPal order ID, transaction ID, etc.)
+  failure_reason    String?       // Lý do thất bại nếu có
+  metadata          Json?         // Lưu thông tin bổ sung (PayPal response, bank info, etc.)
+  notes             String?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
 
-  contract         Contract @relation(fields: [contract_id], references: [contract_id])
-  family_user      User     @relation("FamilyPayments", fields: [family_user_id], references: [user_id])
-  institution      Institution @relation(fields: [institution_id], references: [institution_id])
-  transactions     PaymentTransaction[]
+  contract          Contract      @relation(fields: [contract_id], references: [contract_id])
+  family_user       User          @relation("FamilyPayments", fields: [family_user_id], references: [user_id])
+  institution       Institution   @relation(fields: [institution_id], references: [institution_id])
+  paymentItems      PaymentItem[]
+
   @@index([contract_id])
   @@index([family_user_id])
-  @@index([status])
-  @@index([due_date])
   @@index([institution_id])
-}
-
-// Payment Transaction Model (for tracking payment attempts, especially for online payments)
-model PaymentTransaction {
-  transaction_id   String   @id @default(uuid())
-  payment_id       String
-  transaction_code String?  @unique // External transaction code (e.g., Momo transaction ID)
-  payment_method   PaymentMethod
-  amount           Float
-  status           PaymentTransactionStatus @default(pending)
-  gateway_response Json?    // Response from payment gateway
-  gateway_transaction_id String? // Transaction ID from payment gateway
-  error_message    String?
-  completed_at     DateTime?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
-
-  payment          Payment  @relation(fields: [payment_id], references: [payment_id])
-  @@index([payment_id])
   @@index([status])
-  @@index([transaction_code])
-  @@index([gateway_transaction_id])
+  @@index([payment_number])
+  @@index([due_date])
 }
+
+// Payment Item Model - Chi tiết các gói dịch vụ trong một lần thanh toán
+model PaymentItem {
+  payment_item_id   String   @id @default(uuid())
+  payment_id        String
+  package_id        String
+  contract_service_id String? // Liên kết với ContractService nếu có
+  item_name         String   // Tên gói dịch vụ
+  quantity          Int      @default(1)
+  unit_price        Float
+  total_price       Float
+  period_start      DateTime // Kỳ thanh toán bắt đầu
+  period_end        DateTime // Kỳ thanh toán kết thúc
+  notes             String?
+  created_at        DateTime @default(now())
+
+  payment           Payment  @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade)
+  package           ServicePackage @relation(fields: [package_id], references: [package_id])
+
+//   resident       Resident     @relation(fields: [resident_id], references: [resident_id])
+//   staff          User         @relation("StaffCareLogs", fields: [staff_id], references: [user_id])
+//   activity       Activity?    @relation(fields: [activity_id], references: [activity_id])
+//   schedule       Schedule?    @relation(fields: [schedule_id], references: [schedule_id])
+//   institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+//   @@index([resident_id, start_time])
+//   @@index([staff_id])
+//   @@index([institution_id])
+// }
 

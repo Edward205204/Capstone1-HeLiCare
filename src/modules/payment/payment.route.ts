@@ -1,100 +1,172 @@
 import { Router } from 'express'
 import { paymentController } from './payment.controller'
-import { accessTokenValidator } from '../auth/auth.middleware'
-import {
-  createPaymentValidator,
-  getPaymentsValidator,
-  getPaymentByIdValidator,
-  initiateMomoPaymentValidator,
-  confirmCODPaymentValidator,
-  updatePaymentStatusValidator,
-  getPaymentsByContractValidator,
-  generatePaymentScheduleValidator,
-  isFamily,
-  isAdminOrStaff
-} from './payment.middleware'
 import { wrapRequestHandler } from '~/utils/handler'
+import { accessTokenValidator } from '~/modules/auth/auth.middleware'
+import {
+  createPaymentSchema,
+  generatePaymentsSchema,
+  paymentIdSchema,
+  initiatePayPalPaymentSchema,
+  capturePayPalPaymentSchema,
+  getPaymentsSchema,
+  updatePaymentStatusSchema,
+  processCODPaymentSchema,
+  processBankTransferSchema,
+  processVisaPaymentSchema
+} from './payment.schema'
+import {
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
+  canAccessPayment,
+  isAdminOrStaff,
+  isAdminOnly,
+  isFamilyOrAdmin,
+  validateRequest
+} from './payment.middleware'
 
 const paymentRouter = Router()
 
-// Create Payment (Family only)
-paymentRouter.post(
-  '/payments',
-  accessTokenValidator,
-  isFamily,
-  createPaymentValidator,
-  wrapRequestHandler(paymentController.createPayment)
-)
-
-// Get Payments (Family can see their own, Admin/Staff can see all in institution)
+// GET Routes - Lấy danh sách payments
 paymentRouter.get(
-  '/payments',
+  '/',
   accessTokenValidator,
-  getPaymentsValidator,
+  getPaymentsSchema,
+  validateRequest,
   wrapRequestHandler(paymentController.getPayments)
 )
 
-// Get Payment By ID
 paymentRouter.get(
-  '/payments/:payment_id',
+  '/:payment_id',
   accessTokenValidator,
-  getPaymentByIdValidator,
+  paymentIdSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
   wrapRequestHandler(paymentController.getPaymentById)
 )
 
-// Initiate Momo Payment
+// POST Routes - Tạo payment
 paymentRouter.post(
-  '/payments/:payment_id/momo/initiate',
+  '/',
   accessTokenValidator,
-  isFamily,
-  initiateMomoPaymentValidator,
-  wrapRequestHandler(paymentController.initiateMomoPayment)
+  isFamilyOrAdmin,
+  createPaymentSchema,
+  validateRequest,
+  wrapRequestHandler(paymentController.createPayment)
 )
 
-// Momo Payment Callback (no auth required - called by Momo)
-paymentRouter.get(
-  '/payments/momo/callback',
-  wrapRequestHandler(paymentController.handleMomoCallback)
-)
-
-// Momo Payment Callback POST (no auth required - called by Momo)
+// Generate payments from contract (Admin/Staff only)
 paymentRouter.post(
-  '/payments/momo/callback',
-  wrapRequestHandler(paymentController.handleMomoCallback)
-)
-
-// Confirm COD Payment (Admin/Staff only)
-paymentRouter.post(
-  '/payments/:payment_id/cod/confirm',
+  '/contract/:contract_id/generate',
   accessTokenValidator,
   isAdminOrStaff,
-  confirmCODPaymentValidator,
-  wrapRequestHandler(paymentController.confirmCODPayment)
+  generatePaymentsSchema,
+  validateRequest,
+  wrapRequestHandler(paymentController.generatePaymentsFromContract)
 )
 
-// Update Payment Status (Admin/Staff only)
-paymentRouter.patch(
-  '/payments/:payment_id/status',
+// PayPal payment flow
+paymentRouter.post(
+  '/:payment_id/paypal/initiate',
+  accessTokenValidator,
+  isFamilyOrAdmin,
+  initiatePayPalPaymentSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
+  wrapRequestHandler(paymentController.initiatePayPalPayment)
+)
+
+paymentRouter.post(
+  '/:payment_id/paypal/capture',
+  accessTokenValidator,
+  isFamilyOrAdmin,
+  capturePayPalPaymentSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
+  wrapRequestHandler(paymentController.capturePayPalPayment)
+)
+
+// COD payment flow
+paymentRouter.post(
+  '/:payment_id/cod/process',
+  accessTokenValidator,
+  isFamilyOrAdmin,
+  processCODPaymentSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
+  wrapRequestHandler(paymentController.processCODPayment)
+)
+
+paymentRouter.post(
+  '/:payment_id/cod/mark-paid',
   accessTokenValidator,
   isAdminOrStaff,
-  updatePaymentStatusValidator,
+  paymentIdSchema,
+  validateRequest,
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
+  wrapRequestHandler(paymentController.markCODPaymentAsPaid)
+)
+
+// Bank transfer payment flow
+paymentRouter.post(
+  '/:payment_id/bank-transfer/process',
+  accessTokenValidator,
+  isFamilyOrAdmin,
+  processBankTransferSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
+  wrapRequestHandler(paymentController.processBankTransfer)
+)
+
+paymentRouter.post(
+  '/:payment_id/bank-transfer/mark-paid',
+  accessTokenValidator,
+  isAdminOrStaff,
+  paymentIdSchema,
+  validateRequest,
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
+  wrapRequestHandler(paymentController.markBankTransferAsPaid)
+)
+
+// Visa payment flow
+paymentRouter.post(
+  '/:payment_id/visa/process',
+  accessTokenValidator,
+  isFamilyOrAdmin,
+  processVisaPaymentSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
+  wrapRequestHandler(paymentController.processVisaPayment)
+)
+
+paymentRouter.post(
+  '/:payment_id/visa/mark-paid',
+  accessTokenValidator,
+  isAdminOrStaff,
+  paymentIdSchema,
+  validateRequest,
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
+  wrapRequestHandler(paymentController.markVisaPaymentAsPaid)
+)
+
+// PUT Routes - Cập nhật payment status (Admin only)
+paymentRouter.put(
+  '/:payment_id/status',
+  accessTokenValidator,
+  isAdminOnly,
+  updatePaymentStatusSchema,
+  validateRequest,
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
   wrapRequestHandler(paymentController.updatePaymentStatus)
-)
-
-// Get Payments By Contract
-paymentRouter.get(
-  '/contracts/:contract_id/payments',
-  accessTokenValidator,
-  getPaymentsByContractValidator,
-  wrapRequestHandler(paymentController.getPaymentsByContract)
-)
-
-// Generate Payment Schedule
-paymentRouter.get(
-  '/contracts/:contract_id/payment-schedule',
-  accessTokenValidator,
-  generatePaymentScheduleValidator,
-  wrapRequestHandler(paymentController.generatePaymentSchedule)
 )
 
 export default paymentRouter

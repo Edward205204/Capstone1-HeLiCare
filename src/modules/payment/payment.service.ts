@@ -1,27 +1,61 @@
-import { PaymentMethod, PaymentStatus, PaymentTransactionStatus, ContractStatus } from '@prisma/client'
 import { prisma } from '~/utils/db'
 import { ErrorWithStatus } from '~/models/error'
 import { HTTP_STATUS } from '~/constants/http_status'
+import { PaymentMethod, PaymentStatus, PaymentFrequency } from '@prisma/client'
 import {
-  CreatePaymentReqBody,
-  GetPaymentsReqQuery,
-  UpdatePaymentStatusReqBody,
-  ConfirmCODPaymentReqBody,
-  InitiateMomoPaymentReqBody,
-  MomoPaymentCallbackQuery,
-  PaymentWithDetails
+  CreatePaymentParams,
+  GeneratePaymentsFromContractParams,
+  InitiatePayPalPaymentParams,
+  CapturePayPalPaymentParams,
+  UpdatePaymentStatusParams,
+  GetPaymentsParams,
+  ProcessCODPaymentParams,
+  ProcessBankTransferParams,
+  ProcessVisaPaymentParams
 } from './payment.dto'
-import { momoService } from '~/utils/momo.service'
 import { nanoid } from 'nanoid'
+import { env } from '~/utils/dot.env'
+import { OrdersApi, OrdersCreateRequest, OrdersCaptureRequest, Money } from '@paypal/paypal-server-sdk'
+
+// Initialize PayPal SDK
+let paypalClient: any = null
+
+const getPayPalClient = () => {
+  if (!paypalClient) {
+    const { PayPalClient } = require('@paypal/paypal-server-sdk')
+    const clientId = env.PAYPAL_CLIENT_ID
+    const clientSecret = env.PAYPAL_CLIENT_SECRET
+    const environment = env.PAYPAL_ENVIRONMENT || 'sandbox' // 'sandbox' or 'live'
+
+    if (!clientId || !clientSecret) {
+      throw new ErrorWithStatus({
+        message: 'PayPal credentials not configured',
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR
+      })
+    }
+
+    paypalClient = new PayPalClient({
+      clientId,
+      clientSecret,
+      environment
+    })
+  }
+  return paypalClient
+}
 
 class PaymentService {
-  /**
-   * Create a new payment for a contract
-   */
-  async createPayment(family_user_id: string, paymentData: CreatePaymentReqBody) {
-    const { contract_id, payment_method, payment_period_start, payment_period_end, notes } = paymentData
+  constructor() {}
 
-    // Get contract with services
+  // Generate unique payment number
+  private generatePaymentNumber(): string {
+    return `PAY-${Date.now()}-${nanoid(8).toUpperCase()}`
+  }
+
+  // Create a single payment record
+  createPayment = async (data: CreatePaymentParams) => {
+    const { contract_id, family_user_id, institution_id, amount, method, due_date, notes, payment_items } = data
+
+    // Verify contract exists and is active
     const contract = await prisma.contract.findUnique({
       where: { contract_id },
       include: {
@@ -29,9 +63,7 @@ class PaymentService {
           include: {
             package: true
           }
-        },
-        resident: true,
-        family_user: true
+        }
       }
     })
 
@@ -42,70 +74,82 @@ class PaymentService {
       })
     }
 
-    // Verify family user has access to this contract
-    if (contract.family_user_id !== family_user_id) {
-      throw new ErrorWithStatus({
-        message: 'You do not have access to this contract',
-        status: HTTP_STATUS.FORBIDDEN
-      })
-    }
-
-    // Verify contract is active
-    if (contract.status !== ContractStatus.active) {
+    if (contract.status !== 'active') {
       throw new ErrorWithStatus({
         message: 'Contract is not active',
         status: HTTP_STATUS.BAD_REQUEST
       })
     }
 
-    // Calculate payment amount based on contract services and period
-    const periodStart = new Date(payment_period_start)
-    const periodEnd = new Date(payment_period_end)
-    const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24))
-
-    let amount = 0
-    for (const contractService of contract.contractServices) {
-      if (contractService.status === 'active') {
-        // Calculate daily rate based on payment frequency
-        const dailyRate = contract.payment_frequency === 'monthly'
-          ? contractService.price_at_signing / 30
-          : contractService.price_at_signing / 365
-
-        amount += dailyRate * daysInPeriod
-      }
+    // Verify family user exists and has access to this contract
+    if (contract.family_user_id && contract.family_user_id !== family_user_id) {
+      throw new ErrorWithStatus({
+        message: 'Family user does not have access to this contract',
+        status: HTTP_STATUS.FORBIDDEN
+      })
     }
 
-    // Round to 2 decimal places
-    amount = Math.round(amount * 100) / 100
+    // Verify institution matches
+    if (contract.institution_id !== institution_id) {
+      throw new ErrorWithStatus({
+        message: 'Institution mismatch',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
 
-    // Calculate due date (default to end of payment period)
-    const dueDate = new Date(periodEnd)
+    // Calculate total from payment items
+    const calculatedTotal = payment_items.reduce((sum, item) => sum + item.total_price, 0)
+    if (Math.abs(calculatedTotal - amount) > 0.01) {
+      throw new ErrorWithStatus({
+        message: 'Payment amount does not match sum of payment items',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
 
-    // Create payment
+    // Create payment with items
     const payment = await prisma.payment.create({
       data: {
         contract_id,
         family_user_id,
-        institution_id: contract.institution_id,
+        institution_id,
+        payment_number: this.generatePaymentNumber(),
         amount,
-        payment_method,
+        method,
         status: PaymentStatus.pending,
-        due_date: dueDate,
-        payment_period_start: periodStart,
-        payment_period_end: periodEnd,
-        notes
+        due_date: new Date(due_date),
+        notes,
+        paymentItems: {
+          create: payment_items.map((item) => ({
+            package_id: item.package_id,
+            contract_service_id: item.contract_service_id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+            period_start: new Date(item.period_start),
+            period_end: new Date(item.period_end)
+          }))
+        }
       },
       include: {
         contract: {
-          select: {
-            contract_id: true,
-            contract_number: true,
-            resident: {
-              select: {
-                resident_id: true,
-                full_name: true
+          include: {
+            resident: true,
+            contractServices: {
+              include: {
+                package: true
               }
             }
+          }
+        },
+        paymentItems: {
+          include: {
+            package: true
+          }
+        },
+        family_user: {
+          include: {
+            familyProfile: true
           }
         }
       }
@@ -114,131 +158,161 @@ class PaymentService {
     return payment
   }
 
-  /**
-   * Get payments with filters
-   */
-  async getPayments(user_id: string, user_role: string, institution_id: string, query: GetPaymentsReqQuery) {
-    const { contract_id, status, payment_method, start_date, end_date, take = 20, skip = 0 } = query
+  // Generate payment records from contract based on payment frequency
+  generatePaymentsFromContract = async (params: GeneratePaymentsFromContractParams) => {
+    const { contract_id, start_date, end_date } = params
 
-    const where: any = {
-      institution_id
-    }
-
-    // Family users can only see their own payments
-    if (user_role === 'Family') {
-      where.family_user_id = user_id
-    }
-
-    if (contract_id) {
-      where.contract_id = contract_id
-    }
-
-    if (status) {
-      where.status = status
-    }
-
-    if (payment_method) {
-      where.payment_method = payment_method
-    }
-
-    if (start_date || end_date) {
-      where.due_date = {}
-      if (start_date) {
-        where.due_date.gte = new Date(start_date)
-      }
-      if (end_date) {
-        where.due_date.lte = new Date(end_date)
-      }
-    }
-
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        include: {
-          contract: {
-            select: {
-              contract_id: true,
-              contract_number: true,
-              resident: {
-                select: {
-                  resident_id: true,
-                  full_name: true
-                }
-              }
-            }
+    const contract = await prisma.contract.findUnique({
+      where: { contract_id },
+      include: {
+        contractServices: {
+          include: {
+            package: true
           },
-          transactions: {
-            select: {
-              transaction_id: true,
-              transaction_code: true,
-              status: true,
-              gateway_transaction_id: true,
-              created_at: true
-            },
-            orderBy: {
-              created_at: 'desc'
-            }
+          where: {
+            status: 'active'
           }
         },
-        orderBy: {
-          due_date: 'asc'
-        },
-        take,
-        skip
-      }),
-      prisma.payment.count({ where })
-    ])
+        resident: true
+      }
+    })
 
-    return { payments, total }
+    if (!contract) {
+      throw new ErrorWithStatus({
+        message: 'Contract not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (contract.status !== 'active') {
+      throw new ErrorWithStatus({
+        message: 'Contract is not active',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (!contract.family_user_id) {
+      throw new ErrorWithStatus({
+        message: 'Contract does not have a family user assigned',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const periodStart = start_date ? new Date(start_date) : new Date(contract.start_date)
+    const periodEnd = end_date ? new Date(end_date) : contract.end_date || new Date()
+
+    if (periodStart >= periodEnd) {
+      throw new ErrorWithStatus({
+        message: 'Start date must be before end date',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const payments: any[] = []
+
+    if (contract.payment_frequency === PaymentFrequency.monthly) {
+      // Generate monthly payments
+      let currentDate = new Date(periodStart)
+      while (currentDate < periodEnd) {
+        const monthEnd = new Date(currentDate)
+        monthEnd.setMonth(monthEnd.getMonth() + 1)
+        if (monthEnd > periodEnd) {
+          monthEnd.setTime(periodEnd.getTime())
+        }
+
+        // Calculate amount for this period based on contract services
+        let periodAmount = 0
+        const paymentItems: any[] = []
+
+        for (const contractService of contract.contractServices) {
+          const itemAmount = contractService.price_at_signing
+          periodAmount += itemAmount
+
+          paymentItems.push({
+            package_id: contractService.package_id,
+            contract_service_id: contractService.contract_service_id,
+            item_name: contractService.package.name,
+            quantity: 1,
+            unit_price: contractService.price_at_signing,
+            total_price: contractService.price_at_signing,
+            period_start: new Date(currentDate),
+            period_end: new Date(monthEnd)
+          })
+        }
+
+        if (periodAmount > 0) {
+          const dueDate = new Date(monthEnd)
+          dueDate.setDate(dueDate.getDate() + 7) // Due date is 7 days after period end
+
+          const payment = await this.createPayment({
+            contract_id,
+            family_user_id: contract.family_user_id,
+            institution_id: contract.institution_id,
+            amount: periodAmount,
+            method: PaymentMethod.paypal, // Default to PayPal, can be changed later
+            due_date: dueDate,
+            payment_items: paymentItems
+          })
+
+          payments.push(payment)
+        }
+
+        currentDate = new Date(monthEnd)
+      }
+    } else if (contract.payment_frequency === PaymentFrequency.annually) {
+      // Generate annual payment
+      const periodAmount = contract.total_amount
+      const paymentItems: any[] = []
+
+      for (const contractService of contract.contractServices) {
+        paymentItems.push({
+          package_id: contractService.package_id,
+          contract_service_id: contractService.contract_service_id,
+          item_name: contractService.package.name,
+          quantity: 1,
+          unit_price: contractService.price_at_signing,
+          total_price: contractService.price_at_signing,
+          period_start: new Date(periodStart),
+          period_end: new Date(periodEnd)
+        })
+      }
+
+      const dueDate = new Date(periodEnd)
+      dueDate.setDate(dueDate.getDate() + 7)
+
+      const payment = await this.createPayment({
+        contract_id,
+        family_user_id: contract.family_user_id,
+        institution_id: contract.institution_id,
+        amount: periodAmount,
+        method: PaymentMethod.paypal,
+        due_date: dueDate,
+        payment_items: paymentItems
+      })
+
+      payments.push(payment)
+    }
+
+    return payments
   }
 
-  /**
-   * Get payment by ID
-   */
-  async getPaymentById(payment_id: string, user_id: string, user_role: string) {
+  // Initiate PayPal payment - Create PayPal order
+  initiatePayPalPayment = async (params: InitiatePayPalPaymentParams) => {
+    const { payment_id, return_url, cancel_url } = params
+
     const payment = await prisma.payment.findUnique({
       where: { payment_id },
       include: {
+        paymentItems: {
+          include: {
+            package: true
+          }
+        },
         contract: {
-          select: {
-            contract_id: true,
-            contract_number: true,
-            resident: {
-              select: {
-                resident_id: true,
-                full_name: true
-              }
-            }
-          }
-        },
-        transactions: {
-          select: {
-            transaction_id: true,
-            transaction_code: true,
-            status: true,
-            gateway_transaction_id: true,
-            error_message: true,
-            gateway_response: true,
-            created_at: true,
-            completed_at: true
-          },
-          orderBy: {
-            created_at: 'desc'
-          }
-        },
-        family_user: {
-          select: {
-            user_id: true,
-            email: true,
-            familyProfile: {
-              select: {
-                full_name: true,
-                phone: true
-              }
-            }
+          include: {
+            resident: true
           }
         }
-      }
     })
 
     if (!payment) {
@@ -248,28 +322,571 @@ class PaymentService {
       })
     }
 
-    // Family users can only see their own payments
-    if (user_role === 'Family' && payment.family_user_id !== user_id) {
+    if (payment.method !== PaymentMethod.paypal) {
       throw new ErrorWithStatus({
-        message: 'You do not have access to this payment',
-        status: HTTP_STATUS.FORBIDDEN
+        message: 'Payment method is not PayPal',
+        status: HTTP_STATUS.BAD_REQUEST
       })
     }
 
-    return payment
+    if (payment.status !== PaymentStatus.pending) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in pending status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    try {
+      const client = getPayPalClient()
+      const ordersApi = new OrdersApi(client)
+
+      // Build PayPal order request
+      const request = new OrdersCreateRequest()
+      request.prefer('return=representation')
+      request.requestBody({
+        intent: 'CAPTURE',
+        purchase_units: [
+          {
+            reference_id: payment.payment_number,
+            description: `Payment for contract ${payment.contract.contract_number}`,
+            amount: {
+              currency_code: 'USD',
+              value: payment.amount.toFixed(2)
+            },
+            items: payment.paymentItems.map((item) => ({
+              name: item.item_name,
+              quantity: item.quantity.toString(),
+              unit_amount: {
+                currency_code: 'USD',
+                value: item.unit_price.toFixed(2)
+              }
+            }))
+          }
+        ],
+        application_context: {
+          brand_name: 'HeLiCare',
+          landing_page: 'NO_PREFERENCE',
+          user_action: 'PAY_NOW',
+          return_url: return_url,
+          cancel_url: cancel_url
+        }
+      })
+
+      const response = await ordersApi.ordersCreate(request)
+
+      if (response.statusCode !== 201 || !response.result) {
+        throw new Error('Failed to create PayPal order')
+      }
+
+      const order = response.result
+      const orderId = order.id
+
+      if (!orderId) {
+        throw new Error('PayPal order ID not found')
+      }
+
+      // Update payment with PayPal order ID
+      await prisma.payment.update({
+        where: { payment_id },
+        data: {
+          status: PaymentStatus.processing,
+          payment_reference: orderId,
+          metadata: {
+            paypal_order: order,
+            created_at: new Date().toISOString()
+          }
+        }
+      })
+
+      // Find approval URL
+      const approvalUrl = order.links?.find((link: any) => link.rel === 'approve')?.href
+
+      return {
+        order_id: orderId,
+        approval_url: approvalUrl,
+        payment_id: payment.payment_id,
+        payment_number: payment.payment_number
+      }
+    } catch (error: any) {
+      // Update payment status to failed
+      await prisma.payment.update({
+        where: { payment_id },
+        data: {
+          status: PaymentStatus.failed,
+          failure_reason: error.message || 'Failed to create PayPal order'
+        }
+      })
+
+      throw new ErrorWithStatus({
+        message: `PayPal payment initiation failed: ${error.message}`,
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR
+      })
+    }
   }
 
-  /**
-   * Initiate Momo payment
-   */
-  async initiateMomoPayment(payment_id: string, return_url?: string, notify_url?: string) {
-    // Get payment
+  // Capture PayPal payment
+  capturePayPalPayment = async (params: CapturePayPalPaymentParams) => {
+    const { payment_id, order_id } = params
+
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.payment_reference !== order_id) {
+      throw new ErrorWithStatus({
+        message: 'Order ID does not match payment reference',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.processing) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in processing status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    try {
+      const client = getPayPalClient()
+      const ordersApi = new OrdersApi(client)
+
+      const request = new OrdersCaptureRequest(order_id)
+      request.requestBody({})
+
+      const response = await ordersApi.ordersCapture(request)
+
+      if (response.statusCode !== 201 || !response.result) {
+        throw new Error('Failed to capture PayPal payment')
+      }
+
+      const capture = response.result
+      const captureId = capture.id
+      const status = capture.status
+
+      if (status === 'COMPLETED') {
+        // Update payment as paid
+        await prisma.payment.update({
+          where: { payment_id },
+          data: {
+            status: PaymentStatus.paid,
+            paid_at: new Date(),
+            payment_reference: captureId || order_id,
+            metadata: {
+              paypal_capture: capture,
+              captured_at: new Date().toISOString()
+            }
+          }
+        })
+
+        return {
+          success: true,
+          payment_id: payment.payment_id,
+          capture_id: captureId,
+          status: 'paid'
+        }
+      } else {
+        // Payment not completed
+        await prisma.payment.update({
+          where: { payment_id },
+          data: {
+            status: PaymentStatus.failed,
+            failure_reason: `PayPal capture status: ${status}`,
+            metadata: {
+              paypal_capture: capture
+            }
+          }
+        })
+
+        return {
+          success: false,
+          payment_id: payment.payment_id,
+          status: 'failed',
+          reason: `PayPal capture status: ${status}`
+        }
+      }
+    } catch (error: any) {
+      // Update payment status to failed
+      await prisma.payment.update({
+        where: { payment_id },
+        data: {
+          status: PaymentStatus.failed,
+          failure_reason: error.message || 'Failed to capture PayPal payment'
+        }
+      })
+
+      throw new ErrorWithStatus({
+        message: `PayPal payment capture failed: ${error.message}`,
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR
+      })
+    }
+  }
+
+  // Process COD payment
+  processCODPayment = async (params: ProcessCODPaymentParams) => {
+    const { payment_id, notes } = params
+
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.method !== PaymentMethod.COD) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not COD',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.pending) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in pending status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // For COD, we mark it as processing (waiting for cash collection)
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        notes: notes || payment.notes,
+        metadata: {
+          cod_processing: true,
+          processed_at: new Date().toISOString()
+        }
+      },
+      include: {
+        contract: true,
+        paymentItems: true
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Mark COD payment as paid (when cash is collected)
+  markCODPaymentAsPaid = async (payment_id: string) => {
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.method !== PaymentMethod.COD) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not COD',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.processing) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in processing status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.paid,
+        paid_at: new Date(),
+        metadata: {
+          ...(payment.metadata as any),
+          cod_collected: true,
+          collected_at: new Date().toISOString()
+        }
+      },
+      include: {
+        contract: true,
+        paymentItems: true
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Process bank transfer payment
+  processBankTransfer = async (params: ProcessBankTransferParams) => {
+    const { payment_id, bank_name, account_number, transaction_reference, notes } = params
+
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.method !== PaymentMethod.bank_transfer) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not bank transfer',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.pending) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in pending status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // Mark as processing (waiting for bank confirmation)
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        payment_reference: transaction_reference,
+        notes: notes || payment.notes,
+        metadata: {
+          bank_name,
+          account_number,
+          transaction_reference,
+          processed_at: new Date().toISOString()
+        }
+      },
+      include: {
+        contract: true,
+        paymentItems: true
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Mark bank transfer as paid (when confirmed)
+  markBankTransferAsPaid = async (payment_id: string) => {
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.method !== PaymentMethod.bank_transfer) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not bank transfer',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.processing) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in processing status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.paid,
+        paid_at: new Date(),
+        metadata: {
+          ...(payment.metadata as any),
+          confirmed_at: new Date().toISOString()
+        }
+      },
+      include: {
+        contract: true,
+        paymentItems: true
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Process Visa payment
+  processVisaPayment = async (params: ProcessVisaPaymentParams) => {
+    const { payment_id, card_last_four, transaction_id, notes } = params
+
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.method !== PaymentMethod.visa) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not Visa',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.pending) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in pending status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // For Visa, we'll mark it as processing first
+    // In a real implementation, you would integrate with a payment gateway
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        payment_reference: transaction_id,
+        notes: notes || payment.notes,
+        metadata: {
+          card_last_four,
+          transaction_id,
+          processed_at: new Date().toISOString()
+        }
+      },
+      include: {
+        contract: true,
+        paymentItems: true
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Mark Visa payment as paid
+  markVisaPaymentAsPaid = async (payment_id: string) => {
+    const payment = await prisma.payment.findUnique({
+      where: { payment_id }
+    })
+
+    if (!payment) {
+      throw new ErrorWithStatus({
+        message: 'Payment not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    if (payment.method !== PaymentMethod.visa) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not Visa',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    if (payment.status !== PaymentStatus.processing) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in processing status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.paid,
+        paid_at: new Date(),
+        metadata: {
+          ...(payment.metadata as any),
+          confirmed_at: new Date().toISOString()
+        }
+      },
+      include: {
+        contract: true,
+        paymentItems: true
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Get payments with filters
+  getPayments = async (params: GetPaymentsParams) => {
+    const { contract_id, family_user_id, institution_id, status, method, take, skip } = params
+
+    const where: any = {}
+
+    if (contract_id) where.contract_id = contract_id
+    if (family_user_id) where.family_user_id = family_user_id
+    if (institution_id) where.institution_id = institution_id
+    if (status) where.status = status
+    if (method) where.method = method
+
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        include: {
+          contract: {
+            include: {
+              resident: true,
+              contractServices: {
+                include: {
+                  package: true
+                }
+              }
+            }
+          },
+          paymentItems: {
+            include: {
+              package: true
+            }
+          },
+          family_user: {
+            include: {
+              familyProfile: true
+            }
+          }
+        },
+        orderBy: {
+          created_at: 'desc'
+        },
+        take: take || 50,
+        skip: skip || 0
+      }),
+      prisma.payment.count({ where })
+    ])
+
+    return { payments, total }
+  }
+
+  // Get payment by ID
+  getPaymentById = async (payment_id: string) => {
     const payment = await prisma.payment.findUnique({
       where: { payment_id },
       include: {
         contract: {
           include: {
-            resident: true
+            resident: true,
+            contractServices: {
+              include: {
+                package: true
+              }
+            }
+          }
+        },
+        paymentItems: {
+          include: {
+            package: true
           }
         },
         family_user: {
@@ -287,106 +904,13 @@ class PaymentService {
       })
     }
 
-    if (payment.payment_method !== PaymentMethod.momo) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not Momo',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.pending) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in pending status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Create transaction
-    const transaction = await prisma.paymentTransaction.create({
-      data: {
-        payment_id,
-        payment_method: PaymentMethod.momo,
-        amount: payment.amount,
-        status: PaymentTransactionStatus.pending
-      }
-    })
-
-    // Create order info
-    const orderInfo = `Thanh toan hop dong ${payment.contract.contract_number} - ${payment.contract.resident.full_name}`
-    const orderId = `PAY${payment_id.substring(0, 8).toUpperCase()}${Date.now()}`
-
-    try {
-      // Create Momo payment request
-      const momoResponse = await momoService.createPayment({
-        orderId,
-        amount: Math.round(payment.amount),
-        orderInfo,
-        requestId: transaction.transaction_id,
-        extraData: JSON.stringify({ payment_id, transaction_id: transaction.transaction_id }),
-        redirectUrl: return_url,
-        ipnUrl: notify_url
-      })
-
-      // Update transaction with gateway response
-      await prisma.paymentTransaction.update({
-        where: { transaction_id: transaction.transaction_id },
-        data: {
-          gateway_transaction_id: momoResponse.orderId,
-          gateway_response: momoResponse as any,
-          status: PaymentTransactionStatus.processing
-        }
-      })
-
-      return {
-        payment_url: momoResponse.payUrl || momoResponse.deeplink || momoResponse.qrCodeUrl,
-        transaction_id: transaction.transaction_id,
-        payment_id: payment.payment_id,
-        order_id: orderId
-      }
-    } catch (error) {
-      // Update transaction as failed
-      await prisma.paymentTransaction.update({
-        where: { transaction_id: transaction.transaction_id },
-        data: {
-          status: PaymentTransactionStatus.failed,
-          error_message: error instanceof Error ? error.message : 'Unknown error',
-          gateway_response: { error: error instanceof Error ? error.message : 'Unknown error' } as any
-        }
-      })
-
-      throw new ErrorWithStatus({
-        message: `Failed to initiate Momo payment: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
+    return payment
   }
 
-  /**
-   * Handle Momo payment callback
-   */
-  async handleMomoCallback(callbackData: MomoPaymentCallbackQuery) {
-    // Verify signature
-    const isValid = momoService.verifyCallbackSignature(callbackData as any)
+  // Update payment status (admin function)
+  updatePaymentStatus = async (params: UpdatePaymentStatusParams) => {
+    const { payment_id, status, payment_reference, failure_reason, metadata, paid_at } = params
 
-    if (!isValid) {
-      throw new ErrorWithStatus({
-        message: 'Invalid Momo callback signature',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Find transaction by order ID
-    const extraData = callbackData.extraData ? JSON.parse(callbackData.extraData) : {}
-    const payment_id = extraData.payment_id
-
-    if (!payment_id) {
-      throw new ErrorWithStatus({
-        message: 'Payment ID not found in callback data',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Get payment
     const payment = await prisma.payment.findUnique({
       where: { payment_id }
     })
@@ -398,294 +922,26 @@ class PaymentService {
       })
     }
 
-    // Find transaction
-    const transaction = await prisma.paymentTransaction.findFirst({
-      where: {
-        payment_id,
-        gateway_transaction_id: callbackData.orderId
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    })
+    const updateData: any = { status }
 
-    if (!transaction) {
-      throw new ErrorWithStatus({
-        message: 'Transaction not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    // Update transaction
-    const transactionStatus =
-      callbackData.resultCode === 0
-        ? PaymentTransactionStatus.completed
-        : PaymentTransactionStatus.failed
-
-    await prisma.paymentTransaction.update({
-      where: { transaction_id: transaction.transaction_id },
-      data: {
-        transaction_code: callbackData.transId,
-        status: transactionStatus,
-        gateway_response: callbackData as any,
-        error_message: callbackData.resultCode !== 0 ? callbackData.message : null,
-        completed_at: callbackData.resultCode === 0 ? new Date() : null
-      }
-    })
-
-    // Update payment if successful
-    if (callbackData.resultCode === 0) {
-      await prisma.payment.update({
-        where: { payment_id },
-        data: {
-          status: PaymentStatus.paid,
-          paid_date: new Date()
-        }
-      })
-    }
-
-    return {
-      success: callbackData.resultCode === 0,
-      message: callbackData.message,
-      payment_id,
-      transaction_id: transaction.transaction_id
-    }
-  }
-
-  /**
-   * Confirm COD payment
-   */
-  async confirmCODPayment(payment_id: string, confirmation_code?: string, notes?: string) {
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.payment_method !== PaymentMethod.COD) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not COD',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.pending) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in pending status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Create transaction for COD
-    await prisma.paymentTransaction.create({
-      data: {
-        payment_id,
-        transaction_code: confirmation_code || `COD${nanoid(10)}`,
-        payment_method: PaymentMethod.COD,
-        amount: payment.amount,
-        status: PaymentTransactionStatus.completed,
-        completed_at: new Date()
-      }
-    })
-
-    // Update payment
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.paid,
-        paid_date: new Date(),
-        notes: notes || payment.notes
-      },
-      include: {
-        contract: {
-          select: {
-            contract_id: true,
-            contract_number: true,
-            resident: {
-              select: {
-                resident_id: true,
-                full_name: true
-              }
-            }
-          }
-        }
-      }
-    })
-
-    return updatedPayment
-  }
-
-  /**
-   * Update payment status (for admin/staff)
-   */
-  async updatePaymentStatus(payment_id: string, updateData: UpdatePaymentStatusReqBody) {
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    const updatePayload: any = {
-      status: updateData.status
-    }
-
-    if (updateData.notes) {
-      updatePayload.notes = updateData.notes
-    }
-
-    if (updateData.status === PaymentStatus.paid && !payment.paid_date) {
-      updatePayload.paid_date = updateData.paid_date ? new Date(updateData.paid_date) : new Date()
+    if (payment_reference) updateData.payment_reference = payment_reference
+    if (failure_reason) updateData.failure_reason = failure_reason
+    if (metadata) updateData.metadata = metadata
+    if (paid_at) updateData.paid_at = new Date(paid_at)
+    if (status === PaymentStatus.paid && !paid_at) {
+      updateData.paid_at = new Date()
     }
 
     const updatedPayment = await prisma.payment.update({
       where: { payment_id },
-      data: updatePayload,
+      data: updateData,
       include: {
-        contract: {
-          select: {
-            contract_id: true,
-            contract_number: true,
-            resident: {
-              select: {
-                resident_id: true,
-                full_name: true
-              }
-            }
-          }
-        }
+        contract: true,
+        paymentItems: true
       }
     })
 
     return updatedPayment
-  }
-
-  /**
-   * Get payments by contract
-   */
-  async getPaymentsByContract(contract_id: string, user_id: string, user_role: string) {
-    const contract = await prisma.contract.findUnique({
-      where: { contract_id }
-    })
-
-    if (!contract) {
-      throw new ErrorWithStatus({
-        message: 'Contract not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    // Family users can only see their own contract payments
-    if (user_role === 'Family' && contract.family_user_id !== user_id) {
-      throw new ErrorWithStatus({
-        message: 'You do not have access to this contract',
-        status: HTTP_STATUS.FORBIDDEN
-      })
-    }
-
-    const payments = await prisma.payment.findMany({
-      where: { contract_id },
-      include: {
-        transactions: {
-          select: {
-            transaction_id: true,
-            transaction_code: true,
-            status: true,
-            gateway_transaction_id: true,
-            created_at: true
-          },
-          orderBy: {
-            created_at: 'desc'
-          }
-        }
-      },
-      orderBy: {
-        due_date: 'asc'
-      }
-    })
-
-    return payments
-  }
-
-  /**
-   * Generate payment schedule for a contract
-   */
-  async generatePaymentSchedule(contract_id: string, start_date: Date, end_date: Date) {
-    const contract = await prisma.contract.findUnique({
-      where: { contract_id },
-      include: {
-        contractServices: {
-          include: {
-            package: true
-          }
-        }
-      }
-    })
-
-    if (!contract) {
-      throw new ErrorWithStatus({
-        message: 'Contract not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    const payments: any[] = []
-    const currentDate = new Date(start_date)
-    const endDate = new Date(end_date)
-
-    while (currentDate < endDate) {
-      const periodStart = new Date(currentDate)
-      let periodEnd: Date
-
-      if (contract.payment_frequency === 'monthly') {
-        periodEnd = new Date(currentDate)
-        periodEnd.setMonth(periodEnd.getMonth() + 1)
-      } else {
-        // annually
-        periodEnd = new Date(currentDate)
-        periodEnd.setFullYear(periodEnd.getFullYear() + 1)
-      }
-
-      if (periodEnd > endDate) {
-        periodEnd = endDate
-      }
-
-      // Calculate amount for this period
-      const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24))
-      let amount = 0
-
-      for (const contractService of contract.contractServices) {
-        if (contractService.status === 'active') {
-          const dailyRate = contract.payment_frequency === 'monthly'
-            ? contractService.price_at_signing / 30
-            : contractService.price_at_signing / 365
-
-          amount += dailyRate * daysInPeriod
-        }
-      }
-
-      amount = Math.round(amount * 100) / 100
-
-      payments.push({
-        period_start: periodStart,
-        period_end: periodEnd,
-        due_date: periodEnd,
-        amount
-      })
-
-      currentDate.setTime(periodEnd.getTime())
-    }
-
-    return payments
   }
 }
 
