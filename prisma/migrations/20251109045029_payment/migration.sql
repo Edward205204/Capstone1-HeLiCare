@@ -24,8 +24,10 @@ CREATE TYPE "public"."PaymentTransactionStatus" AS ENUM ('pending', 'processing'
 -- the enum.
 
 
+-- Add payment methods: COD, paypal (lowercase), bank_transfer, visa
+-- Note: MoMo is NOT added as it will be removed in future migration
 ALTER TYPE "public"."PaymentMethod" ADD VALUE 'COD';
-ALTER TYPE "public"."PaymentMethod" ADD VALUE 'momo';
+-- ALTER TYPE "public"."PaymentMethod" ADD VALUE 'paypal';
 ALTER TYPE "public"."PaymentMethod" ADD VALUE 'bank_transfer';
 ALTER TYPE "public"."PaymentMethod" ADD VALUE 'visa';
 

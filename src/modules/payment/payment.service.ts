@@ -1,178 +1,35 @@
 import { prisma } from '~/utils/db'
-import { ErrorWithStatus } from '~/models/error'
-import { HTTP_STATUS } from '~/constants/http_status'
-import { PaymentMethod, PaymentStatus, PaymentFrequency } from '@prisma/client'
 import {
   CreatePaymentParams,
-  GeneratePaymentsFromContractParams,
-  InitiatePayPalPaymentParams,
-  CapturePayPalPaymentParams,
-  UpdatePaymentStatusParams,
   GetPaymentsParams,
-  ProcessCODPaymentParams,
-  ProcessBankTransferParams,
-  ProcessVisaPaymentParams
+  InitiatePayPalPaymentParams,
+  UpdatePaymentStatusParams,
+  ProcessPayPalWebhookParams,
+  CreateBankTransferPaymentParams,
+  CreateVisaPaymentParams
 } from './payment.dto'
+import { PaymentMethod, PaymentStatus } from '@prisma/client'
+import { ErrorWithStatus } from '~/models/error'
+import { HTTP_STATUS } from '~/constants/http_status'
 import { nanoid } from 'nanoid'
-import { env } from '~/utils/dot.env'
-import { OrdersApi, OrdersCreateRequest, OrdersCaptureRequest, Money } from '@paypal/paypal-server-sdk'
-
-// Initialize PayPal SDK
-let paypalClient: any = null
-
-const getPayPalClient = () => {
-  if (!paypalClient) {
-    const { PayPalClient } = require('@paypal/paypal-server-sdk')
-    const clientId = env.PAYPAL_CLIENT_ID
-    const clientSecret = env.PAYPAL_CLIENT_SECRET
-    const environment = env.PAYPAL_ENVIRONMENT || 'sandbox' // 'sandbox' or 'live'
-
-    if (!clientId || !clientSecret) {
-      throw new ErrorWithStatus({
-        message: 'PayPal credentials not configured',
-        status: HTTP_STATUS.INTERNAL_SERVER_ERROR
-      })
-    }
-
-    paypalClient = new PayPalClient({
-      clientId,
-      clientSecret,
-      environment
-    })
-  }
-  return paypalClient
-}
+import { PayPalClient } from './paypal.client'
 
 class PaymentService {
-  constructor() {}
+  private paypalClient: PayPalClient
 
-  // Generate unique payment number
-  private generatePaymentNumber(): string {
-    return `PAY-${Date.now()}-${nanoid(8).toUpperCase()}`
+  constructor() {
+    this.paypalClient = new PayPalClient()
   }
 
-  // Create a single payment record
-  createPayment = async (data: CreatePaymentParams) => {
-    const { contract_id, family_user_id, institution_id, amount, method, due_date, notes, payment_items } = data
+  // Tạo payment mới
+  createPayment = async (params: CreatePaymentParams) => {
+    const { contract_id, family_user_id, institution_id, method, due_date, payment_items, notes } = params
 
-    // Verify contract exists and is active
+    // Kiểm tra contract tồn tại và active
     const contract = await prisma.contract.findUnique({
       where: { contract_id },
       include: {
-        contractServices: {
-          include: {
-            package: true
-          }
-        }
-      }
-    })
-
-    if (!contract) {
-      throw new ErrorWithStatus({
-        message: 'Contract not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (contract.status !== 'active') {
-      throw new ErrorWithStatus({
-        message: 'Contract is not active',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Verify family user exists and has access to this contract
-    if (contract.family_user_id && contract.family_user_id !== family_user_id) {
-      throw new ErrorWithStatus({
-        message: 'Family user does not have access to this contract',
-        status: HTTP_STATUS.FORBIDDEN
-      })
-    }
-
-    // Verify institution matches
-    if (contract.institution_id !== institution_id) {
-      throw new ErrorWithStatus({
-        message: 'Institution mismatch',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Calculate total from payment items
-    const calculatedTotal = payment_items.reduce((sum, item) => sum + item.total_price, 0)
-    if (Math.abs(calculatedTotal - amount) > 0.01) {
-      throw new ErrorWithStatus({
-        message: 'Payment amount does not match sum of payment items',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Create payment with items
-    const payment = await prisma.payment.create({
-      data: {
-        contract_id,
-        family_user_id,
-        institution_id,
-        payment_number: this.generatePaymentNumber(),
-        amount,
-        method,
-        status: PaymentStatus.pending,
-        due_date: new Date(due_date),
-        notes,
-        paymentItems: {
-          create: payment_items.map((item) => ({
-            package_id: item.package_id,
-            contract_service_id: item.contract_service_id,
-            item_name: item.item_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.total_price,
-            period_start: new Date(item.period_start),
-            period_end: new Date(item.period_end)
-          }))
-        }
-      },
-      include: {
-        contract: {
-          include: {
-            resident: true,
-            contractServices: {
-              include: {
-                package: true
-              }
-            }
-          }
-        },
-        paymentItems: {
-          include: {
-            package: true
-          }
-        },
-        family_user: {
-          include: {
-            familyProfile: true
-          }
-        }
-      }
-    })
-
-    return payment
-  }
-
-  // Generate payment records from contract based on payment frequency
-  generatePaymentsFromContract = async (params: GeneratePaymentsFromContractParams) => {
-    const { contract_id, start_date, end_date } = params
-
-    const contract = await prisma.contract.findUnique({
-      where: { contract_id },
-      include: {
-        contractServices: {
-          include: {
-            package: true
-          },
-          where: {
-            status: 'active'
-          }
-        },
+        contractServices: true,
         resident: true
       }
     })
@@ -191,677 +48,125 @@ class PaymentService {
       })
     }
 
-    if (!contract.family_user_id) {
-      throw new ErrorWithStatus({
-        message: 'Contract does not have a family user assigned',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
+    // Tính tổng số tiền từ payment items
+    const totalAmount = payment_items.reduce((sum, item) => sum + item.total_price, 0)
 
-    const periodStart = start_date ? new Date(start_date) : new Date(contract.start_date)
-    const periodEnd = end_date ? new Date(end_date) : contract.end_date || new Date()
+    // Tạo payment number duy nhất
+    const payment_number = `PAY-${Date.now()}-${nanoid(8).toUpperCase()}`
 
-    if (periodStart >= periodEnd) {
-      throw new ErrorWithStatus({
-        message: 'Start date must be before end date',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    const payments: any[] = []
-
-    if (contract.payment_frequency === PaymentFrequency.monthly) {
-      // Generate monthly payments
-      let currentDate = new Date(periodStart)
-      while (currentDate < periodEnd) {
-        const monthEnd = new Date(currentDate)
-        monthEnd.setMonth(monthEnd.getMonth() + 1)
-        if (monthEnd > periodEnd) {
-          monthEnd.setTime(periodEnd.getTime())
-        }
-
-        // Calculate amount for this period based on contract services
-        let periodAmount = 0
-        const paymentItems: any[] = []
-
-        for (const contractService of contract.contractServices) {
-          const itemAmount = contractService.price_at_signing
-          periodAmount += itemAmount
-
-          paymentItems.push({
-            package_id: contractService.package_id,
-            contract_service_id: contractService.contract_service_id,
-            item_name: contractService.package.name,
-            quantity: 1,
-            unit_price: contractService.price_at_signing,
-            total_price: contractService.price_at_signing,
-            period_start: new Date(currentDate),
-            period_end: new Date(monthEnd)
-          })
-        }
-
-        if (periodAmount > 0) {
-          const dueDate = new Date(monthEnd)
-          dueDate.setDate(dueDate.getDate() + 7) // Due date is 7 days after period end
-
-          const payment = await this.createPayment({
-            contract_id,
-            family_user_id: contract.family_user_id,
-            institution_id: contract.institution_id,
-            amount: periodAmount,
-            method: PaymentMethod.paypal, // Default to PayPal, can be changed later
-            due_date: dueDate,
-            payment_items: paymentItems
-          })
-
-          payments.push(payment)
-        }
-
-        currentDate = new Date(monthEnd)
-      }
-    } else if (contract.payment_frequency === PaymentFrequency.annually) {
-      // Generate annual payment
-      const periodAmount = contract.total_amount
-      const paymentItems: any[] = []
-
-      for (const contractService of contract.contractServices) {
-        paymentItems.push({
-          package_id: contractService.package_id,
-          contract_service_id: contractService.contract_service_id,
-          item_name: contractService.package.name,
-          quantity: 1,
-          unit_price: contractService.price_at_signing,
-          total_price: contractService.price_at_signing,
-          period_start: new Date(periodStart),
-          period_end: new Date(periodEnd)
-        })
-      }
-
-      const dueDate = new Date(periodEnd)
-      dueDate.setDate(dueDate.getDate() + 7)
-
-      const payment = await this.createPayment({
+    // Tạo payment và payment items
+    const payment = await prisma.payment.create({
+      data: {
         contract_id,
-        family_user_id: contract.family_user_id,
-        institution_id: contract.institution_id,
-        amount: periodAmount,
-        method: PaymentMethod.paypal,
-        due_date: dueDate,
-        payment_items: paymentItems
-      })
-
-      payments.push(payment)
-    }
-
-    return payments
-  }
-
-  // Initiate PayPal payment - Create PayPal order
-  initiatePayPalPayment = async (params: InitiatePayPalPaymentParams) => {
-    const { payment_id, return_url, cancel_url } = params
-
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id },
-      include: {
+        family_user_id,
+        institution_id,
+        payment_number,
+        amount: totalAmount,
+        method,
+        status: PaymentStatus.pending,
+        due_date: new Date(due_date),
+        notes,
         paymentItems: {
-          include: {
-            package: true
-          }
-        },
+          create: payment_items.map((item) => ({
+            package_id: item.package_id,
+            contract_service_id: item.contract_service_id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total_price: item.total_price,
+            period_start: new Date(item.period_start),
+            period_end: new Date(item.period_end),
+            notes: item.notes
+          }))
+        }
+      },
+      include: {
         contract: {
           include: {
             resident: true
           }
-        }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.paypal) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not PayPal',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.pending) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in pending status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    try {
-      const client = getPayPalClient()
-      const ordersApi = new OrdersApi(client)
-
-      // Build PayPal order request
-      const request = new OrdersCreateRequest()
-      request.prefer('return=representation')
-      request.requestBody({
-        intent: 'CAPTURE',
-        purchase_units: [
-          {
-            reference_id: payment.payment_number,
-            description: `Payment for contract ${payment.contract.contract_number}`,
-            amount: {
-              currency_code: 'USD',
-              value: payment.amount.toFixed(2)
-            },
-            items: payment.paymentItems.map((item) => ({
-              name: item.item_name,
-              quantity: item.quantity.toString(),
-              unit_amount: {
-                currency_code: 'USD',
-                value: item.unit_price.toFixed(2)
-              }
-            }))
+        },
+        family_user: {
+          include: {
+            familyProfile: true
           }
-        ],
-        application_context: {
-          brand_name: 'HeLiCare',
-          landing_page: 'NO_PREFERENCE',
-          user_action: 'PAY_NOW',
-          return_url: return_url,
-          cancel_url: cancel_url
-        }
-      })
-
-      const response = await ordersApi.ordersCreate(request)
-
-      if (response.statusCode !== 201 || !response.result) {
-        throw new Error('Failed to create PayPal order')
-      }
-
-      const order = response.result
-      const orderId = order.id
-
-      if (!orderId) {
-        throw new Error('PayPal order ID not found')
-      }
-
-      // Update payment with PayPal order ID
-      await prisma.payment.update({
-        where: { payment_id },
-        data: {
-          status: PaymentStatus.processing,
-          payment_reference: orderId,
-          metadata: {
-            paypal_order: order,
-            created_at: new Date().toISOString()
+        },
+        paymentItems: {
+          include: {
+            package: true
           }
         }
-      })
-
-      // Find approval URL
-      const approvalUrl = order.links?.find((link: any) => link.rel === 'approve')?.href
-
-      return {
-        order_id: orderId,
-        approval_url: approvalUrl,
-        payment_id: payment.payment_id,
-        payment_number: payment.payment_number
       }
-    } catch (error: any) {
-      // Update payment status to failed
-      await prisma.payment.update({
-        where: { payment_id },
-        data: {
-          status: PaymentStatus.failed,
-          failure_reason: error.message || 'Failed to create PayPal order'
-        }
-      })
+    })
 
-      throw new ErrorWithStatus({
-        message: `PayPal payment initiation failed: ${error.message}`,
-        status: HTTP_STATUS.INTERNAL_SERVER_ERROR
-      })
-    }
+    return payment
   }
 
-  // Capture PayPal payment
-  capturePayPalPayment = async (params: CapturePayPalPaymentParams) => {
-    const { payment_id, order_id } = params
-
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.payment_reference !== order_id) {
-      throw new ErrorWithStatus({
-        message: 'Order ID does not match payment reference',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.processing) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in processing status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    try {
-      const client = getPayPalClient()
-      const ordersApi = new OrdersApi(client)
-
-      const request = new OrdersCaptureRequest(order_id)
-      request.requestBody({})
-
-      const response = await ordersApi.ordersCapture(request)
-
-      if (response.statusCode !== 201 || !response.result) {
-        throw new Error('Failed to capture PayPal payment')
-      }
-
-      const capture = response.result
-      const captureId = capture.id
-      const status = capture.status
-
-      if (status === 'COMPLETED') {
-        // Update payment as paid
-        await prisma.payment.update({
-          where: { payment_id },
-          data: {
-            status: PaymentStatus.paid,
-            paid_at: new Date(),
-            payment_reference: captureId || order_id,
-            metadata: {
-              paypal_capture: capture,
-              captured_at: new Date().toISOString()
-            }
-          }
-        })
-
-        return {
-          success: true,
-          payment_id: payment.payment_id,
-          capture_id: captureId,
-          status: 'paid'
-        }
-      } else {
-        // Payment not completed
-        await prisma.payment.update({
-          where: { payment_id },
-          data: {
-            status: PaymentStatus.failed,
-            failure_reason: `PayPal capture status: ${status}`,
-            metadata: {
-              paypal_capture: capture
-            }
-          }
-        })
-
-        return {
-          success: false,
-          payment_id: payment.payment_id,
-          status: 'failed',
-          reason: `PayPal capture status: ${status}`
-        }
-      }
-    } catch (error: any) {
-      // Update payment status to failed
-      await prisma.payment.update({
-        where: { payment_id },
-        data: {
-          status: PaymentStatus.failed,
-          failure_reason: error.message || 'Failed to capture PayPal payment'
-        }
-      })
-
-      throw new ErrorWithStatus({
-        message: `PayPal payment capture failed: ${error.message}`,
-        status: HTTP_STATUS.INTERNAL_SERVER_ERROR
-      })
-    }
-  }
-
-  // Process COD payment
-  processCODPayment = async (params: ProcessCODPaymentParams) => {
-    const { payment_id, notes } = params
-
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.COD) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not COD',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.pending) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in pending status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // For COD, we mark it as processing (waiting for cash collection)
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.processing,
-        notes: notes || payment.notes,
-        metadata: {
-          cod_processing: true,
-          processed_at: new Date().toISOString()
-        }
-      },
-      include: {
-        contract: true,
-        paymentItems: true
-      }
-    })
-
-    return updatedPayment
-  }
-
-  // Mark COD payment as paid (when cash is collected)
-  markCODPaymentAsPaid = async (payment_id: string) => {
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.COD) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not COD',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.processing) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in processing status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.paid,
-        paid_at: new Date(),
-        metadata: {
-          ...(payment.metadata as any),
-          cod_collected: true,
-          collected_at: new Date().toISOString()
-        }
-      },
-      include: {
-        contract: true,
-        paymentItems: true
-      }
-    })
-
-    return updatedPayment
-  }
-
-  // Process bank transfer payment
-  processBankTransfer = async (params: ProcessBankTransferParams) => {
-    const { payment_id, bank_name, account_number, transaction_reference, notes } = params
-
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.bank_transfer) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not bank transfer',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.pending) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in pending status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Mark as processing (waiting for bank confirmation)
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.processing,
-        payment_reference: transaction_reference,
-        notes: notes || payment.notes,
-        metadata: {
-          bank_name,
-          account_number,
-          transaction_reference,
-          processed_at: new Date().toISOString()
-        }
-      },
-      include: {
-        contract: true,
-        paymentItems: true
-      }
-    })
-
-    return updatedPayment
-  }
-
-  // Mark bank transfer as paid (when confirmed)
-  markBankTransferAsPaid = async (payment_id: string) => {
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.bank_transfer) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not bank transfer',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.processing) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in processing status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.paid,
-        paid_at: new Date(),
-        metadata: {
-          ...(payment.metadata as any),
-          confirmed_at: new Date().toISOString()
-        }
-      },
-      include: {
-        contract: true,
-        paymentItems: true
-      }
-    })
-
-    return updatedPayment
-  }
-
-  // Process Visa payment
-  processVisaPayment = async (params: ProcessVisaPaymentParams) => {
-    const { payment_id, card_last_four, transaction_id, notes } = params
-
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.visa) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not Visa',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.pending) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in pending status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // For Visa, we'll mark it as processing first
-    // In a real implementation, you would integrate with a payment gateway
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.processing,
-        payment_reference: transaction_id,
-        notes: notes || payment.notes,
-        metadata: {
-          card_last_four,
-          transaction_id,
-          processed_at: new Date().toISOString()
-        }
-      },
-      include: {
-        contract: true,
-        paymentItems: true
-      }
-    })
-
-    return updatedPayment
-  }
-
-  // Mark Visa payment as paid
-  markVisaPaymentAsPaid = async (payment_id: string) => {
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
-
-    if (!payment) {
-      throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
-      })
-    }
-
-    if (payment.method !== PaymentMethod.visa) {
-      throw new ErrorWithStatus({
-        message: 'Payment method is not Visa',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    if (payment.status !== PaymentStatus.processing) {
-      throw new ErrorWithStatus({
-        message: 'Payment is not in processing status',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    const updatedPayment = await prisma.payment.update({
-      where: { payment_id },
-      data: {
-        status: PaymentStatus.paid,
-        paid_at: new Date(),
-        metadata: {
-          ...(payment.metadata as any),
-          confirmed_at: new Date().toISOString()
-        }
-      },
-      include: {
-        contract: true,
-        paymentItems: true
-      }
-    })
-
-    return updatedPayment
-  }
-
-  // Get payments with filters
+  // Lấy danh sách payments
   getPayments = async (params: GetPaymentsParams) => {
-    const { contract_id, family_user_id, institution_id, status, method, take, skip } = params
+    const { institution_id, contract_id, family_user_id, status, method, take = 20, skip = 0 } = params
 
-    const where: any = {}
+    const where: any = { institution_id }
 
-    if (contract_id) where.contract_id = contract_id
-    if (family_user_id) where.family_user_id = family_user_id
-    if (institution_id) where.institution_id = institution_id
-    if (status) where.status = status
-    if (method) where.method = method
+    if (contract_id) {
+      where.contract_id = contract_id
+    }
+
+    if (family_user_id) {
+      where.family_user_id = family_user_id
+    }
+
+    if (status) {
+      where.status = status
+    }
+
+    if (method) {
+      where.method = method
+    }
 
     const [payments, total] = await Promise.all([
       prisma.payment.findMany({
         where,
         include: {
           contract: {
-            include: {
-              resident: true,
-              contractServices: {
-                include: {
-                  package: true
+            select: {
+              contract_id: true,
+              contract_number: true,
+              resident: {
+                select: {
+                  resident_id: true,
+                  full_name: true
+                }
+              }
+            }
+          },
+          family_user: {
+            select: {
+              user_id: true,
+              email: true,
+              familyProfile: {
+                select: {
+                  full_name: true,
+                  phone: true
                 }
               }
             }
           },
           paymentItems: {
             include: {
-              package: true
-            }
-          },
-          family_user: {
-            include: {
-              familyProfile: true
+              package: {
+                select: {
+                  package_id: true,
+                  name: true,
+                  type: true
+                }
+              }
             }
           }
         },
-        orderBy: {
-          created_at: 'desc'
-        },
-        take: take || 50,
-        skip: skip || 0
+        take,
+        skip,
+        orderBy: { created_at: 'desc' }
       }),
       prisma.payment.count({ where })
     ])
@@ -869,7 +174,7 @@ class PaymentService {
     return { payments, total }
   }
 
-  // Get payment by ID
+  // Lấy payment theo ID
   getPaymentById = async (payment_id: string) => {
     const payment = await prisma.payment.findUnique({
       where: { payment_id },
@@ -884,14 +189,22 @@ class PaymentService {
             }
           }
         },
-        paymentItems: {
-          include: {
-            package: true
-          }
-        },
         family_user: {
           include: {
             familyProfile: true
+          }
+        },
+        institution: {
+          select: {
+            institution_id: true,
+            name: true,
+            address: true,
+            contact_info: true
+          }
+        },
+        paymentItems: {
+          include: {
+            package: true
           }
         }
       }
@@ -907,41 +220,424 @@ class PaymentService {
     return payment
   }
 
-  // Update payment status (admin function)
-  updatePaymentStatus = async (params: UpdatePaymentStatusParams) => {
-    const { payment_id, status, payment_reference, failure_reason, metadata, paid_at } = params
+  // Khởi tạo thanh toán PayPal
+  initiatePayPalPayment = async (params: InitiatePayPalPaymentParams) => {
+    const { payment_id, return_url, cancel_url } = params
 
-    const payment = await prisma.payment.findUnique({
-      where: { payment_id }
-    })
+    const payment = await this.getPaymentById(payment_id)
 
-    if (!payment) {
+    if (payment.method !== PaymentMethod.paypal) {
       throw new ErrorWithStatus({
-        message: 'Payment not found',
-        status: HTTP_STATUS.NOT_FOUND
+        message: 'Payment method is not PayPal',
+        status: HTTP_STATUS.BAD_REQUEST
       })
     }
 
-    const updateData: any = { status }
+    if (payment.status !== PaymentStatus.pending) {
+      throw new ErrorWithStatus({
+        message: 'Payment is not in pending status',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
 
-    if (payment_reference) updateData.payment_reference = payment_reference
-    if (failure_reason) updateData.failure_reason = failure_reason
-    if (metadata) updateData.metadata = metadata
-    if (paid_at) updateData.paid_at = new Date(paid_at)
-    if (status === PaymentStatus.paid && !paid_at) {
+    // Tạo PayPal order
+    const paypalOrder = await this.paypalClient.createOrder({
+      amount: payment.amount,
+      currency: 'USD',
+      description: `Payment for contract ${payment.contract.contract_number}`,
+      custom_id: payment_id,
+      return_url: return_url,
+      cancel_url: cancel_url
+    })
+
+    // Cập nhật payment với PayPal order ID
+    await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        payment_reference: paypalOrder.id,
+        metadata: {
+          paypal_order_id: paypalOrder.id,
+          approval_url: paypalOrder.links?.find((link: any) => link.rel === 'approve')?.href
+        }
+      }
+    })
+
+    return {
+      payment_id,
+      approval_url: paypalOrder.links?.find((link: any) => link.rel === 'approve')?.href,
+      order_id: paypalOrder.id
+    }
+  }
+
+  // Xử lý PayPal webhook
+  processPayPalWebhook = async (params: ProcessPayPalWebhookParams) => {
+    const { event_type, resource } = params
+
+    if (event_type === 'PAYMENT.CAPTURE.COMPLETED' || event_type === 'CHECKOUT.ORDER.APPROVED') {
+      const order_id = resource.id || resource.order_id
+      
+      // Tìm payment theo PayPal order ID
+      const payment = await prisma.payment.findFirst({
+        where: {
+          payment_reference: order_id,
+          method: PaymentMethod.paypal
+        }
+      })
+
+      if (!payment) {
+        console.error(`Payment not found for PayPal order: ${order_id}`)
+        return
+      }
+
+      // Cập nhật trạng thái thanh toán
+      await prisma.payment.update({
+        where: { payment_id: payment.payment_id },
+        data: {
+          status: PaymentStatus.paid,
+          paid_at: new Date(),
+          metadata: {
+            ...(payment.metadata as any),
+            webhook_event: event_type,
+            webhook_resource: resource
+          }
+        }
+      })
+    } else if (event_type === 'PAYMENT.CAPTURE.DENIED' || event_type === 'PAYMENT.CAPTURE.REFUNDED') {
+      const order_id = resource.id || resource.order_id
+      
+      const payment = await prisma.payment.findFirst({
+        where: {
+          payment_reference: order_id,
+          method: PaymentMethod.paypal
+        }
+      })
+
+      if (payment) {
+        await prisma.payment.update({
+          where: { payment_id: payment.payment_id },
+          data: {
+            status: event_type.includes('REFUNDED') ? PaymentStatus.refunded : PaymentStatus.failed,
+            failure_reason: resource.reason_code || 'Payment denied',
+            metadata: {
+              ...(payment.metadata as any),
+              webhook_event: event_type,
+              webhook_resource: resource
+            }
+          }
+        })
+      }
+    }
+  }
+
+  // Xác nhận thanh toán PayPal (sau khi user approve)
+  confirmPayPalPayment = async (payment_id: string, order_id: string) => {
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.payment_reference !== order_id) {
+      throw new ErrorWithStatus({
+        message: 'Invalid PayPal order ID',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // Capture payment từ PayPal
+    const captureResult = await this.paypalClient.captureOrder(order_id)
+
+    if (captureResult.status === 'COMPLETED') {
+      await prisma.payment.update({
+        where: { payment_id },
+        data: {
+          status: PaymentStatus.paid,
+          paid_at: new Date(),
+          metadata: {
+            ...(payment.metadata as any),
+            capture_result: captureResult
+          }
+        }
+      })
+
+      return { success: true, payment }
+    } else {
+      await prisma.payment.update({
+        where: { payment_id },
+        data: {
+          status: PaymentStatus.failed,
+          failure_reason: 'Payment capture failed',
+          metadata: {
+            ...(payment.metadata as any),
+            capture_result: captureResult
+          }
+        }
+      })
+
+      throw new ErrorWithStatus({
+        message: 'Payment capture failed',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+  }
+
+  // Xử lý thanh toán COD
+  processCODPayment = async (payment_id: string) => {
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.method !== PaymentMethod.COD) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not COD',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // COD được đánh dấu là processing, sẽ được xác nhận thủ công bởi admin
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        metadata: {
+          cod_confirmed: false,
+          confirmed_at: null
+        }
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Xác nhận COD (Admin only)
+  confirmCODPayment = async (payment_id: string) => {
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.method !== PaymentMethod.COD) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not COD',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.paid,
+        paid_at: new Date(),
+        metadata: {
+          cod_confirmed: true,
+          confirmed_at: new Date().toISOString()
+        }
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Xử lý chuyển khoản ngân hàng
+  processBankTransfer = async (params: CreateBankTransferPaymentParams) => {
+    const { payment_id, bank_name, account_number, account_holder, transfer_reference } = params
+
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.method !== PaymentMethod.bank_transfer) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not bank transfer',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // Chuyển khoản cần được xác nhận thủ công bởi admin
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        payment_reference: transfer_reference,
+        metadata: {
+          bank_name,
+          account_number,
+          account_holder,
+          transfer_reference,
+          confirmed: false
+        }
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Xác nhận chuyển khoản (Admin only)
+  confirmBankTransfer = async (payment_id: string) => {
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.method !== PaymentMethod.bank_transfer) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not bank transfer',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.paid,
+        paid_at: new Date(),
+        metadata: {
+          ...(payment.metadata as any),
+          confirmed: true,
+          confirmed_at: new Date().toISOString()
+        }
+      }
+    })
+
+    return updatedPayment
+  }
+
+  // Xử lý thanh toán Visa (giả lập - trong thực tế cần tích hợp gateway thẻ)
+  processVisaPayment = async (params: CreateVisaPaymentParams) => {
+    const { payment_id, card_number, card_holder, expiry_date, cvv } = params
+
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.method !== PaymentMethod.visa) {
+      throw new ErrorWithStatus({
+        message: 'Payment method is not Visa',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // TODO: Tích hợp với payment gateway thực tế (Stripe, etc.)
+    // Hiện tại chỉ lưu thông tin và đánh dấu processing
+    // Trong production, cần xử lý bảo mật thông tin thẻ
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.processing,
+        metadata: {
+          card_holder,
+          card_last4: card_number.slice(-4),
+          expiry_date,
+          // KHÔNG lưu CVV và số thẻ đầy đủ
+          processed_at: new Date().toISOString()
+        }
+      }
+    })
+
+    // Giả lập xử lý thành công (trong thực tế cần gọi API gateway)
+    // Simulate successful payment
+    setTimeout(async () => {
+      await prisma.payment.update({
+        where: { payment_id },
+        data: {
+          status: PaymentStatus.paid,
+          paid_at: new Date()
+        }
+      })
+    }, 2000)
+
+    return updatedPayment
+  }
+
+  // Cập nhật trạng thái payment (Admin only)
+  updatePaymentStatus = async (params: UpdatePaymentStatusParams) => {
+    const { payment_id, status, payment_reference, failure_reason, metadata, paid_at } = params
+
+    const payment = await this.getPaymentById(payment_id)
+
+    const updateData: any = {
+      status
+    }
+
+    if (payment_reference) {
+      updateData.payment_reference = payment_reference
+    }
+
+    if (failure_reason) {
+      updateData.failure_reason = failure_reason
+    }
+
+    if (metadata) {
+      updateData.metadata = metadata
+    }
+
+    if (paid_at) {
+      updateData.paid_at = new Date(paid_at)
+    } else if (status === PaymentStatus.paid && !payment.paid_at) {
       updateData.paid_at = new Date()
     }
 
     const updatedPayment = await prisma.payment.update({
       where: { payment_id },
-      data: updateData,
-      include: {
-        contract: true,
-        paymentItems: true
+      data: updateData
+    })
+
+    return updatedPayment
+  }
+
+  // Hủy payment
+  cancelPayment = async (payment_id: string) => {
+    const payment = await this.getPaymentById(payment_id)
+
+    if (payment.status === PaymentStatus.paid) {
+      throw new ErrorWithStatus({
+        message: 'Cannot cancel a paid payment',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    const updatedPayment = await prisma.payment.update({
+      where: { payment_id },
+      data: {
+        status: PaymentStatus.cancelled
       }
     })
 
     return updatedPayment
+  }
+
+  // Tính toán số tiền thanh toán từ contract services
+  calculatePaymentAmount = async (contract_id: string, period_start: Date, period_end: Date) => {
+    const contract = await prisma.contract.findUnique({
+      where: { contract_id },
+      include: {
+        contractServices: {
+          where: {
+            status: 'active'
+          },
+          include: {
+            package: true
+          }
+        }
+      }
+    })
+
+    if (!contract) {
+      throw new ErrorWithStatus({
+        message: 'Contract not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    const paymentItems = contract.contractServices.map((contractService) => {
+      const price = contract.payment_frequency === 'monthly' 
+        ? contractService.package.price_monthly 
+        : (contractService.package.price_annually || contractService.package.price_monthly * 12)
+
+      return {
+        package_id: contractService.package_id,
+        contract_service_id: contractService.contract_service_id,
+        item_name: contractService.package.name,
+        quantity: 1,
+        unit_price: price,
+        total_price: price,
+        period_start: new Date(period_start),
+        period_end: new Date(period_end)
+      }
+    })
+
+    const totalAmount = paymentItems.reduce((sum, item) => sum + item.total_price, 0)
+
+    return {
+      payment_items: paymentItems,
+      total_amount: totalAmount
+    }
   }
 }
 

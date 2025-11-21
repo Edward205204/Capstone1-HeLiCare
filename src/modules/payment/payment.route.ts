@@ -4,15 +4,15 @@ import { wrapRequestHandler } from '~/utils/handler'
 import { accessTokenValidator } from '~/modules/auth/auth.middleware'
 import {
   createPaymentSchema,
-  generatePaymentsSchema,
   paymentIdSchema,
-  initiatePayPalPaymentSchema,
-  capturePayPalPaymentSchema,
   getPaymentsSchema,
-  updatePaymentStatusSchema,
+  initiatePayPalPaymentSchema,
+  confirmPayPalPaymentSchema,
   processCODPaymentSchema,
   processBankTransferSchema,
-  processVisaPaymentSchema
+  processVisaPaymentSchema,
+  updatePaymentStatusSchema,
+  calculatePaymentAmountSchema
 } from './payment.schema'
 import {
   paymentIdValidator,
@@ -20,13 +20,13 @@ import {
   canAccessPayment,
   isAdminOrStaff,
   isAdminOnly,
-  isFamilyOrAdmin,
+  isFamilyOnly,
   validateRequest
 } from './payment.middleware'
 
 const paymentRouter = Router()
 
-// GET Routes - Lấy danh sách payments
+// GET Routes
 paymentRouter.get(
   '/',
   accessTokenValidator,
@@ -45,31 +45,28 @@ paymentRouter.get(
   wrapRequestHandler(paymentController.getPaymentById)
 )
 
-// POST Routes - Tạo payment
+paymentRouter.get(
+  '/contract/:contract_id/calculate',
+  accessTokenValidator,
+  calculatePaymentAmountSchema,
+  validateRequest,
+  wrapRequestHandler(paymentController.calculatePaymentAmount)
+)
+
+// POST Routes
 paymentRouter.post(
   '/',
   accessTokenValidator,
-  isFamilyOrAdmin,
+  isFamilyOnly,
   createPaymentSchema,
   validateRequest,
   wrapRequestHandler(paymentController.createPayment)
 )
 
-// Generate payments from contract (Admin/Staff only)
-paymentRouter.post(
-  '/contract/:contract_id/generate',
-  accessTokenValidator,
-  isAdminOrStaff,
-  generatePaymentsSchema,
-  validateRequest,
-  wrapRequestHandler(paymentController.generatePaymentsFromContract)
-)
-
-// PayPal payment flow
 paymentRouter.post(
   '/:payment_id/paypal/initiate',
   accessTokenValidator,
-  isFamilyOrAdmin,
+  isFamilyOnly,
   initiatePayPalPaymentSchema,
   validateRequest,
   paymentIdValidator,
@@ -78,21 +75,20 @@ paymentRouter.post(
 )
 
 paymentRouter.post(
-  '/:payment_id/paypal/capture',
+  '/:payment_id/paypal/confirm',
   accessTokenValidator,
-  isFamilyOrAdmin,
-  capturePayPalPaymentSchema,
+  isFamilyOnly,
+  confirmPayPalPaymentSchema,
   validateRequest,
   paymentIdValidator,
   canAccessPayment,
-  wrapRequestHandler(paymentController.capturePayPalPayment)
+  wrapRequestHandler(paymentController.confirmPayPalPayment)
 )
 
-// COD payment flow
 paymentRouter.post(
-  '/:payment_id/cod/process',
+  '/:payment_id/cod',
   accessTokenValidator,
-  isFamilyOrAdmin,
+  isFamilyOnly,
   processCODPaymentSchema,
   validateRequest,
   paymentIdValidator,
@@ -101,21 +97,9 @@ paymentRouter.post(
 )
 
 paymentRouter.post(
-  '/:payment_id/cod/mark-paid',
+  '/:payment_id/bank-transfer',
   accessTokenValidator,
-  isAdminOrStaff,
-  paymentIdSchema,
-  validateRequest,
-  paymentIdValidator,
-  isPaymentBelongsToInstitution,
-  wrapRequestHandler(paymentController.markCODPaymentAsPaid)
-)
-
-// Bank transfer payment flow
-paymentRouter.post(
-  '/:payment_id/bank-transfer/process',
-  accessTokenValidator,
-  isFamilyOrAdmin,
+  isFamilyOnly,
   processBankTransferSchema,
   validateRequest,
   paymentIdValidator,
@@ -124,21 +108,9 @@ paymentRouter.post(
 )
 
 paymentRouter.post(
-  '/:payment_id/bank-transfer/mark-paid',
+  '/:payment_id/visa',
   accessTokenValidator,
-  isAdminOrStaff,
-  paymentIdSchema,
-  validateRequest,
-  paymentIdValidator,
-  isPaymentBelongsToInstitution,
-  wrapRequestHandler(paymentController.markBankTransferAsPaid)
-)
-
-// Visa payment flow
-paymentRouter.post(
-  '/:payment_id/visa/process',
-  accessTokenValidator,
-  isFamilyOrAdmin,
+  isFamilyOnly,
   processVisaPaymentSchema,
   validateRequest,
   paymentIdValidator,
@@ -146,28 +118,52 @@ paymentRouter.post(
   wrapRequestHandler(paymentController.processVisaPayment)
 )
 
-paymentRouter.post(
-  '/:payment_id/visa/mark-paid',
-  accessTokenValidator,
-  isAdminOrStaff,
-  paymentIdSchema,
-  validateRequest,
-  paymentIdValidator,
-  isPaymentBelongsToInstitution,
-  wrapRequestHandler(paymentController.markVisaPaymentAsPaid)
-)
-
-// PUT Routes - Cập nhật payment status (Admin only)
+// PUT Routes
 paymentRouter.put(
   '/:payment_id/status',
   accessTokenValidator,
-  isAdminOnly,
+  isAdminOrStaff,
   updatePaymentStatusSchema,
   validateRequest,
   paymentIdValidator,
   isPaymentBelongsToInstitution,
   wrapRequestHandler(paymentController.updatePaymentStatus)
 )
+
+paymentRouter.put(
+  '/:payment_id/cod/confirm',
+  accessTokenValidator,
+  isAdminOrStaff,
+  processCODPaymentSchema,
+  validateRequest,
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
+  wrapRequestHandler(paymentController.confirmCODPayment)
+)
+
+paymentRouter.put(
+  '/:payment_id/bank-transfer/confirm',
+  accessTokenValidator,
+  isAdminOrStaff,
+  processCODPaymentSchema,
+  validateRequest,
+  paymentIdValidator,
+  isPaymentBelongsToInstitution,
+  wrapRequestHandler(paymentController.confirmBankTransfer)
+)
+
+paymentRouter.put(
+  '/:payment_id/cancel',
+  accessTokenValidator,
+  paymentIdSchema,
+  validateRequest,
+  paymentIdValidator,
+  canAccessPayment,
+  wrapRequestHandler(paymentController.cancelPayment)
+)
+
+// Webhook Routes (no authentication - PayPal will call this)
+paymentRouter.post('/webhook/paypal', wrapRequestHandler(paymentController.processPayPalWebhook))
 
 export default paymentRouter
 

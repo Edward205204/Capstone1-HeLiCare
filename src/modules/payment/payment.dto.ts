@@ -4,10 +4,8 @@ export interface CreatePaymentParams {
   contract_id: string
   family_user_id: string
   institution_id: string
-  amount: number
   method: PaymentMethod
   due_date: Date
-  notes?: string
   payment_items: {
     package_id: string
     contract_service_id?: string
@@ -17,24 +15,25 @@ export interface CreatePaymentParams {
     total_price: number
     period_start: Date
     period_end: Date
+    notes?: string
   }[]
+  notes?: string
 }
 
-export interface GeneratePaymentsFromContractParams {
-  contract_id: string
-  start_date?: Date
-  end_date?: Date
+export interface GetPaymentsParams {
+  institution_id: string
+  contract_id?: string
+  family_user_id?: string
+  status?: PaymentStatus
+  method?: PaymentMethod
+  take?: number
+  skip?: number
 }
 
 export interface InitiatePayPalPaymentParams {
   payment_id: string
   return_url: string
   cancel_url: string
-}
-
-export interface CapturePayPalPaymentParams {
-  payment_id: string
-  order_id: string
 }
 
 export interface UpdatePaymentStatusParams {
@@ -46,33 +45,24 @@ export interface UpdatePaymentStatusParams {
   paid_at?: Date
 }
 
-export interface GetPaymentsParams {
-  contract_id?: string
-  family_user_id?: string
-  institution_id?: string
-  status?: PaymentStatus
-  method?: PaymentMethod
-  take?: number
-  skip?: number
+export interface ProcessPayPalWebhookParams {
+  event_type: string
+  resource: any
 }
 
-export interface ProcessCODPaymentParams {
-  payment_id: string
-  notes?: string
-}
-
-export interface ProcessBankTransferParams {
+export interface CreateBankTransferPaymentParams {
   payment_id: string
   bank_name: string
   account_number: string
-  transaction_reference: string
-  notes?: string
+  account_holder: string
+  transfer_reference?: string
 }
 
-export interface ProcessVisaPaymentParams {
+export interface CreateVisaPaymentParams {
   payment_id: string
-  card_last_four: string
-  transaction_id: string
-  notes?: string
+  card_number: string
+  card_holder: string
+  expiry_date: string
+  cvv: string
 }
 

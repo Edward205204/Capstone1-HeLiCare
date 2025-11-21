@@ -79,13 +79,14 @@ enum PaymentFrequency {
 }
 
 enum PaymentStatus {
-  pending     // Đang chờ thanh toán
   processing  // Đang xử lý
-  paid        // Đã thanh toán
   failed      // Thanh toán thất bại
   cancelled   // Đã hủy
   refunded    // Đã hoàn tiền
   overdue     // Quá hạn thanh toán
+  failed // Thanh toán thất bại
+  cancelled // Đã hủy
+  refunded // Đã hoàn tiền
 }
 
 enum SpecialCareStatus {

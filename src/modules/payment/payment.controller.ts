@@ -8,27 +8,18 @@ class PaymentController {
 
   // GET Methods
   getPayments = async (req: Request, res: Response) => {
-    const { user_id, role, institution_id } = req.decoded_authorization as any
+    const { institution_id } = req.decoded_authorization as any
     const { contract_id, family_user_id, status, method, take, skip } = req.query
 
-    // Build query params based on user role
-    const queryParams: any = {
+    const result = await paymentService.getPayments({
+      institution_id,
       contract_id: contract_id as string,
+      family_user_id: family_user_id as string,
       status: status as PaymentStatus,
       method: method as PaymentMethod,
       take: take ? parseInt(take as string) : undefined,
       skip: skip ? parseInt(skip as string) : undefined
-    }
-
-    // Admin/Staff can see all payments in their institution
-    if (role === 'Admin' || role === 'Staff' || role === 'RootAdmin') {
-      queryParams.institution_id = institution_id
-    } else if (role === 'Family') {
-      // Family can only see their own payments
-      queryParams.family_user_id = user_id
-    }
-
-    const result = await paymentService.getPayments(queryParams)
+    })
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Get payments successfully',
@@ -48,55 +39,41 @@ class PaymentController {
     })
   }
 
+  calculatePaymentAmount = async (req: Request, res: Response) => {
+    const { contract_id } = req.params
+    const { period_start, period_end } = req.query
+
+    const result = await paymentService.calculatePaymentAmount(
+      contract_id,
+      new Date(period_start as string),
+      new Date(period_end as string)
+    )
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Calculate payment amount successfully',
+      data: result
+    })
+  }
+
   // POST Methods
   createPayment = async (req: Request, res: Response) => {
-    const { institution_id, user_id, role } = req.decoded_authorization as any
-    const {
-      contract_id,
-      amount,
-      method,
-      due_date,
-      notes,
-      payment_items
-    } = req.body
-
-    // Determine family_user_id based on role
-    let family_user_id = req.body.family_user_id
-    if (role === 'Family') {
-      family_user_id = user_id
-    }
+    const { institution_id } = req.decoded_authorization as any
+    const { user_id } = req.decoded_authorization as any
+    const { contract_id, method, due_date, payment_items, notes } = req.body
 
     const newPayment = await paymentService.createPayment({
       contract_id,
-      family_user_id: family_user_id || user_id,
+      family_user_id: user_id,
       institution_id,
-      amount,
       method,
-      due_date,
-      notes,
-      payment_items
+      due_date: new Date(due_date),
+      payment_items,
+      notes
     })
 
     res.status(HTTP_STATUS.CREATED).json({
       message: 'Create payment successfully',
       data: newPayment
-    })
-  }
-
-  generatePaymentsFromContract = async (req: Request, res: Response) => {
-    const { contract_id } = req.params
-    const { start_date, end_date } = req.query
-
-    const payments = await paymentService.generatePaymentsFromContract({
-      contract_id,
-      start_date: start_date ? new Date(start_date as string) : undefined,
-      end_date: end_date ? new Date(end_date as string) : undefined
-    })
-
-    res.status(HTTP_STATUS.CREATED).json({
-      message: 'Generate payments from contract successfully',
-      data: payments,
-      count: payments.length
     })
   }
 
@@ -116,29 +93,22 @@ class PaymentController {
     })
   }
 
-  capturePayPalPayment = async (req: Request, res: Response) => {
+  confirmPayPalPayment = async (req: Request, res: Response) => {
     const { payment_id } = req.params
     const { order_id } = req.body
 
-    const result = await paymentService.capturePayPalPayment({
-      payment_id,
-      order_id
-    })
+    const result = await paymentService.confirmPayPalPayment(payment_id, order_id)
 
     res.status(HTTP_STATUS.OK).json({
-      message: result.success ? 'PayPal payment captured successfully' : 'PayPal payment capture failed',
+      message: 'PayPal payment confirmed successfully',
       data: result
     })
   }
 
   processCODPayment = async (req: Request, res: Response) => {
     const { payment_id } = req.params
-    const { notes } = req.body
 
-    const payment = await paymentService.processCODPayment({
-      payment_id,
-      notes
-    })
+    const payment = await paymentService.processCODPayment(payment_id)
 
     res.status(HTTP_STATUS.OK).json({
       message: 'COD payment processed successfully',
@@ -146,27 +116,27 @@ class PaymentController {
     })
   }
 
-  markCODPaymentAsPaid = async (req: Request, res: Response) => {
+  confirmCODPayment = async (req: Request, res: Response) => {
     const { payment_id } = req.params
 
-    const payment = await paymentService.markCODPaymentAsPaid(payment_id)
+    const payment = await paymentService.confirmCODPayment(payment_id)
 
     res.status(HTTP_STATUS.OK).json({
-      message: 'COD payment marked as paid successfully',
+      message: 'COD payment confirmed successfully',
       data: payment
     })
   }
 
   processBankTransfer = async (req: Request, res: Response) => {
     const { payment_id } = req.params
-    const { bank_name, account_number, transaction_reference, notes } = req.body
+    const { bank_name, account_number, account_holder, transfer_reference } = req.body
 
     const payment = await paymentService.processBankTransfer({
       payment_id,
       bank_name,
       account_number,
-      transaction_reference,
-      notes
+      account_holder,
+      transfer_reference
     })
 
     res.status(HTTP_STATUS.OK).json({
@@ -175,41 +145,31 @@ class PaymentController {
     })
   }
 
-  markBankTransferAsPaid = async (req: Request, res: Response) => {
+  confirmBankTransfer = async (req: Request, res: Response) => {
     const { payment_id } = req.params
 
-    const payment = await paymentService.markBankTransferAsPaid(payment_id)
+    const payment = await paymentService.confirmBankTransfer(payment_id)
 
     res.status(HTTP_STATUS.OK).json({
-      message: 'Bank transfer payment marked as paid successfully',
+      message: 'Bank transfer payment confirmed successfully',
       data: payment
     })
   }
 
   processVisaPayment = async (req: Request, res: Response) => {
     const { payment_id } = req.params
-    const { card_last_four, transaction_id, notes } = req.body
+    const { card_number, card_holder, expiry_date, cvv } = req.body
 
     const payment = await paymentService.processVisaPayment({
       payment_id,
-      card_last_four,
-      transaction_id,
-      notes
+      card_number,
+      card_holder,
+      expiry_date,
+      cvv
     })
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Visa payment processed successfully',
-      data: payment
-    })
-  }
-
-  markVisaPaymentAsPaid = async (req: Request, res: Response) => {
-    const { payment_id } = req.params
-
-    const payment = await paymentService.markVisaPaymentAsPaid(payment_id)
-
-    res.status(HTTP_STATUS.OK).json({
-      message: 'Visa payment marked as paid successfully',
       data: payment
     })
   }
@@ -225,13 +185,46 @@ class PaymentController {
       payment_reference,
       failure_reason,
       metadata,
-      paid_at
+      paid_at: paid_at ? new Date(paid_at) : undefined
     })
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Update payment status successfully',
       data: payment
     })
+  }
+
+  cancelPayment = async (req: Request, res: Response) => {
+    const { payment_id } = req.params
+
+    const payment = await paymentService.cancelPayment(payment_id)
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Cancel payment successfully',
+      data: payment
+    })
+  }
+
+  // Webhook endpoint (no authentication required, but should verify PayPal signature)
+  processPayPalWebhook = async (req: Request, res: Response) => {
+    const { event_type, resource } = req.body
+
+    try {
+      await paymentService.processPayPalWebhook({
+        event_type,
+        resource
+      })
+
+      res.status(HTTP_STATUS.OK).json({
+        message: 'Webhook processed successfully'
+      })
+    } catch (error: any) {
+      console.error('PayPal webhook error:', error)
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        message: 'Webhook processing failed',
+        error: error.message
+      })
+    }
   }
 }
 

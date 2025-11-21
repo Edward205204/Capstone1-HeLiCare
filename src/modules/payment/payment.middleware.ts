@@ -116,12 +116,12 @@ export const isAdminOnly = async (req: Request, res: Response, next: NextFunctio
   next()
 }
 
-export const isFamilyOrAdmin = async (req: Request, res: Response, next: NextFunction) => {
+export const isFamilyOnly = async (req: Request, res: Response, next: NextFunction) => {
   const { role } = req.decoded_authorization as any
 
-  if (![UserRole.Family, UserRole.RootAdmin, UserRole.Admin].includes(role)) {
+  if (role !== UserRole.Family) {
     throw new ErrorWithStatus({
-      message: 'Only Family or Admin can perform this action',
+      message: 'Only Family members can perform this action',
       status: HTTP_STATUS.FORBIDDEN
     })
   }

@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --check .",
-    "prettier:fix": "prettier --write ."
+    "prettier:fix": "prettier --write .",
+    "cleanup:momo": "ts-node scripts/cleanup-momo-payments.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -46,7 +47,7 @@
     "typescript-eslint": "^8.29.0"
   },
   "dependencies": {
-    "@paypal/paypal-server-sdk": "^1.1.0",
+    "@paypal/paypal-server-sdk": "^2.0.0",
     "@prisma/client": "^6.16.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
