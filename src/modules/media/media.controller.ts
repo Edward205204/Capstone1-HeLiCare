@@ -23,18 +23,18 @@ class MediaController {
     res.json({ message: 'Upload video HLS success', data: data })
   }
   // hiển thị ảnh
-  serveStaticImageController = (req: Request, res: Response, next: NextFunction) => {
+  serveStaticImageController = async (req: Request, res: Response, next: NextFunction) => {
     const { name } = req.params
     const filePath = path.resolve(UPLOAD_IMAGES_DIR, name)
-    
+
     console.log('Serving image:', name, 'from path:', filePath)
-    
+
     // Kiểm tra file có tồn tại không
     if (!fs.existsSync(filePath)) {
       console.error('Image not found:', filePath)
       return res.status(HTTP_STATUS.NOT_FOUND).json({ message: 'Image not found' })
     }
-    
+
     // Set proper content type
     res.setHeader('Content-Type', 'image/jpeg')
     res.sendFile(filePath, (err) => {

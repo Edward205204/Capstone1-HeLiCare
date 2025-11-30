@@ -74,6 +74,28 @@ class CareLogController {
     })
   }
 
+  getMealCareLogsByResident = async (req: Request, res: Response) => {
+    const { resident_id } = req.params
+    const { take, skip, start_date, end_date } = req.query
+
+    const result = await this.careLogService.getMealCareLogsByResident(resident_id, {
+      take: Number(take) || undefined,
+      skip: Number(skip) || undefined,
+      start_date: (start_date as string) || undefined,
+      end_date: (end_date as string) || undefined
+    })
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Resident meal care logs fetched successfully',
+      data: {
+        care_logs: result.data,
+        total: result.total,
+        take: Number(take) || 50,
+        skip: Number(skip) || 0
+      }
+    })
+  }
+
   getCareLogsByStaff = async (req: Request, res: Response) => {
     const { staff_id } = req.params
     const { take, skip } = req.query
@@ -105,9 +127,15 @@ class CareLogController {
   // PUT Methods
   updateCareLog = async (req: Request, res: Response) => {
     const { care_log_id } = req.params
-    const data = req.body as UpdateCareLogDto
+    const { correction_reason, ...payload } = req.body as UpdateCareLogDto & {
+      correction_reason?: string
+    }
+    const corrected_by_id = req.decoded_authorization?.user_id as string
 
-    const careLog = await this.careLogService.updateCareLog(care_log_id, data)
+    const careLog = await this.careLogService.updateCareLog(care_log_id, payload, {
+      corrected_by_id,
+      correction_reason
+    })
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log updated successfully',
@@ -117,7 +145,10 @@ class CareLogController {
 
   updateCareLogStatus = async (req: Request, res: Response) => {
     const { care_log_id } = req.params
-    const { status } = req.body
+    const { status, correction_reason } = req.body as {
+      status: CareTaskStatus
+      correction_reason?: string
+    }
 
     if (!Object.values(CareTaskStatus).includes(status)) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -126,7 +157,11 @@ class CareLogController {
       return
     }
 
-    const careLog = await this.careLogService.updateCareLogStatus(care_log_id, status)
+    const corrected_by_id = req.decoded_authorization?.user_id as string
+    const careLog = await this.careLogService.updateCareLogStatus(care_log_id, status, {
+      corrected_by_id,
+      correction_reason
+    })
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Care log status updated successfully',

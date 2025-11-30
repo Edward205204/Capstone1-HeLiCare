@@ -14,14 +14,24 @@ export const visitDateSchema = {
   notEmpty: {
     errorMessage: 'Visit date is required'
   },
-  isISO8601: {
-    errorMessage: 'Visit date must be a valid ISO date string'
-  },
   custom: {
     options: (value: string) => {
+      // Accept both "YYYY-MM-DD" and full ISO8601 format
+      const simpleDateRegex = /^\d{4}-\d{2}-\d{2}$/
+      const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$/
+      
+      if (!simpleDateRegex.test(value) && !isoDateRegex.test(value)) {
+        throw new Error('Visit date must be a valid date string (YYYY-MM-DD or ISO8601)')
+      }
+
       const visitDate = new Date(value)
+      if (isNaN(visitDate.getTime())) {
+        throw new Error('Visit date is invalid')
+      }
+
       const today = new Date()
       today.setHours(0, 0, 0, 0)
+      visitDate.setHours(0, 0, 0, 0)
 
       if (visitDate < today) {
         throw new Error('Visit date cannot be in the past')
@@ -41,15 +51,14 @@ export const visitDateSchema = {
 }
 
 export const visitTimeSchema = {
-  notEmpty: {
-    errorMessage: 'Visit time is required'
-  },
+  optional: true,
   matches: {
     options: /^([0-1]?\d|2[0-3]):[0-5]\d$/,
     errorMessage: 'Visit time must be in HH:MM format (e.g., 09:00, 14:30)'
   },
   custom: {
     options: (value: string) => {
+      if (!value) return true
       const [hours] = value.split(':').map(Number)
 
       // Chỉ cho phép thăm viếng từ 8:00 đến 18:00
@@ -59,6 +68,14 @@ export const visitTimeSchema = {
 
       return true
     }
+  }
+}
+
+export const visitTimeBlockSchema = {
+  optional: true,
+  isIn: {
+    options: [['morning', 'afternoon', 'evening']],
+    errorMessage: 'Time block must be one of: morning, afternoon, evening'
   }
 }
 

@@ -4,6 +4,7 @@ export interface CreateScheduleDto {
   activity_id: string
   resident_id?: string
   staff_id?: string
+  staff_ids?: string[] // For multiple staff assignment
   title: string
   description?: string
   start_time: Date
@@ -47,37 +48,37 @@ export interface ScheduleResponse {
   schedule_id: string
   activity_id: string
   institution_id: string
-  resident_id?: string
-  staff_id?: string
+  resident_id?: string | null
+  staff_id?: string | null
   title: string
-  description?: string
+  description?: string | null
   start_time: Date
   end_time: Date
   frequency: ScheduleFrequency
   is_recurring: boolean
-  recurring_until?: Date
+  recurring_until?: Date | null
   status: ActivityStatus
-  notes?: string
+  notes?: string | null
   created_at: Date
   updated_at: Date
   activity?: {
     activity_id: string
     name: string
     type: ActivityType
-    duration_minutes?: number
+    duration_minutes?: number | null
   }
   resident?: {
     resident_id: string
     full_name: string
-    room_id?: string
-  }
+    room_id?: string | null
+  } | null
   staff?: {
     user_id: string
     staffProfile?: {
       full_name: string
       position: string
-    }
-  }
+    } | null
+  } | null
   institution?: {
     institution_id: string
     name: string

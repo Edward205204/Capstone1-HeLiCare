@@ -1,9 +1,10 @@
-import { VisitStatus } from '@prisma/client'
+import { VisitStatus, VisitTimeBlock } from '@prisma/client'
 
 export interface CreateVisitReqBody {
   resident_id: string
   visit_date: string // ISO date string
-  visit_time: string // Format: "HH:MM"
+  visit_time?: string // Format: "HH:MM" - deprecated, use time_block instead
+  time_block?: VisitTimeBlock // Time block: morning, afternoon, evening
   duration?: number // Duration in minutes (default 60)
   purpose?: string
   notes?: string
@@ -11,7 +12,8 @@ export interface CreateVisitReqBody {
 
 export interface UpdateVisitReqBody {
   visit_date?: string
-  visit_time?: string
+  visit_time?: string // deprecated, use time_block instead
+  time_block?: VisitTimeBlock
   duration?: number
   purpose?: string
   notes?: string
@@ -58,14 +60,16 @@ export interface VisitAvailabilityResponse {
   total_visitors: number
   max_visitors_per_day: number
   is_day_available: boolean
-  time_slots: {
-    slot_id: string
-    name: string
-    start_time: string
-    end_time: string
+  time_blocks: {
+    time_block: VisitTimeBlock
     current_visitors: number
     max_visitors: number
     is_available: boolean
+  }[]
+  suggestions?: {
+    date: string
+    time_block: VisitTimeBlock
+    available_slots: number
   }[]
 }
 
@@ -86,14 +90,15 @@ export interface VisitWithQRCode {
   resident_id: string
   institution_id: string
   visit_date: Date
-  visit_time: string
+  visit_time?: string
+  time_block?: VisitTimeBlock
   duration: number
   purpose?: string
   notes?: string
   status: VisitStatus
   qr_code_data: string
   qr_expires_at: Date
-  time_slot: {
+  time_slot?: {
     name: string
     start_time: string
     end_time: string

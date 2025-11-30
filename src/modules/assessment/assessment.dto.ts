@@ -26,6 +26,9 @@ export interface CreateAssessmentParams {
     respiratory_rate?: number
     oxygen_saturation?: number
     notes?: string
+    measured_at?: Date | string
+    measurement_shift?: string
+    measurement_by?: string
   }
   assessed_by_id: string
 }
@@ -45,7 +48,12 @@ export interface UpdateAssessmentParams {
     respiratory_rate?: number
     oxygen_saturation?: number
     notes?: string
+    measured_at?: Date | string
+    measurement_shift?: string
+    measurement_by?: string
   }
+  corrected_by_id?: string
+  correction_reason?: string
 }
 
 export interface GetAssessmentsParams {

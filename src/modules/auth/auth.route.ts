@@ -13,7 +13,9 @@ import {
   validateFamilyLinkTokenValidator,
   confirmFamilyLinkValidator,
   resendEmailVerifyValidator,
-  checkUserByEmailValidator
+  checkUserByEmailValidator,
+  changePasswordValidator,
+  residentLoginValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
 
@@ -26,6 +28,15 @@ const authRouter = Router()
  * @response {message: string, data: {access_token: string, refresh_token: string}}
  */
 authRouter.post('/login', loginValidator, wrapRequestHandler(authController.login))
+
+/**
+ * @description Login for Resident Role (uses username instead of email)
+ * @method POST
+ * @path /auth/resident/login
+ * @body {username: string, password: string}
+ * @response {message: string, data: {access_token: string, refresh_token: string}}
+ */
+authRouter.post('/resident/login', residentLoginValidator, wrapRequestHandler(authController.residentLogin))
 
 /**
  * @description Register for Family and Resident
@@ -103,6 +114,16 @@ authRouter.post(
  * @response {message: string}
  */
 authRouter.post('/reset-password', resetPasswordValidator, wrapRequestHandler(authController.resetPassword))
+
+/**
+ * @description Change password for authenticated users (Family and Resident)
+ * @method POST
+ * @path /auth/change-password
+ * @header {Authorization: Bearer <access_token>}
+ * @body {current_password: string, new_password: string, confirm_password: string}
+ * @response {message: string}
+ */
+authRouter.post('/change-password', accessTokenValidator, changePasswordValidator, wrapRequestHandler(authController.changePassword))
 
 /**
  * @description Renew invite token for all member of institution

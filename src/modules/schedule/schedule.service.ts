@@ -1,4 +1,4 @@
-import { PrismaClient, Schedule, ActivityStatus, ScheduleFrequency, ActivityType } from '@prisma/client'
+import { Schedule, ActivityStatus, ActivityType } from '@prisma/client'
 import {
   CreateScheduleDto,
   UpdateScheduleDto,
@@ -7,9 +7,12 @@ import {
   ScheduleStatistics
 } from './schedule.dto'
 
-const prisma = new PrismaClient()
+import { prisma } from '~/utils/db'
 
 export class ScheduleService {
+  /**
+   * Create a single schedule
+   */
   async createSchedule(institution_id: string, data: CreateScheduleDto): Promise<Schedule> {
     return await prisma.schedule.create({
       data: {
@@ -51,6 +54,73 @@ export class ScheduleService {
         }
       }
     })
+  }
+
+  /**
+   * Create multiple schedules for the same event (e.g., multiple staff assignment)
+   * Returns the created schedules
+   */
+  async createSchedulesForEvent(
+    institution_id: string,
+    baseData: Omit<CreateScheduleDto, 'staff_id'>,
+    staff_ids: string[]
+  ): Promise<Schedule[]> {
+    if (staff_ids.length === 0) {
+      throw new Error('At least one staff_id is required')
+    }
+
+    // Generate a group_id to link related schedules
+    const group_id = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    // Create schedules for each staff member
+    const schedules = await Promise.all(
+      staff_ids.map((staff_id) =>
+        prisma.schedule.create({
+          data: {
+            institution_id,
+            ...baseData,
+            staff_id,
+            notes: baseData.notes ? `${baseData.notes}\n[Group: ${group_id}]` : `[Group: ${group_id}]`
+          },
+          include: {
+            activity: {
+              select: {
+                activity_id: true,
+                name: true,
+                type: true,
+                duration_minutes: true
+              }
+            },
+            resident: {
+              select: {
+                resident_id: true,
+                full_name: true,
+                room_id: true
+              }
+            },
+            staff: {
+              select: {
+                user_id: true,
+                staffProfile: {
+                  select: {
+                    full_name: true,
+                    position: true
+                  }
+                }
+              }
+            },
+            institution: {
+              select: {
+                institution_id: true,
+                name: true
+              }
+            }
+          }
+        })
+      )
+    )
+
+    return schedules
   }
 
   async getSchedulesByInstitution(

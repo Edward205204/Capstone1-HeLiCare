@@ -1,15 +1,16 @@
 import { Router } from 'express'
 import { roomController } from './room.controller'
 import {
-  isHandleByAdminOrRootAdmin,
+  // isHandleByAdminOrRootAdmin,
   createRoomValidator,
   updateRoomValidator,
   roomIdValidator,
-  institutionIdValidator,
+  // institutionIdValidator,
   addResidentToRoomValidator,
   removeResidentFromRoomValidator
 } from './room.middleware'
 import { accessTokenValidator } from '../auth/auth.middleware'
+import { isHandleByAdminOrStaff } from '../feedback/feedback.middleware'
 
 const roomRouter = Router()
 
@@ -22,30 +23,30 @@ roomRouter.get('/rooms', roomController.getRoomsByInstitution) // Lấy institut
 roomRouter.get('/rooms/:room_id', roomIdValidator, roomController.getRoomById)
 roomRouter.get('/rooms/:room_id/residents', roomIdValidator, roomController.getResidentsInRoom)
 
-// Create/Update/Delete - chỉ admin
-roomRouter.post('/rooms', createRoomValidator, isHandleByAdminOrRootAdmin, roomController.createRoom)
+// Create/Update/Delete - chỉ admin hoặc staff
+roomRouter.post('/rooms', createRoomValidator, isHandleByAdminOrStaff, roomController.createRoom)
 roomRouter.patch(
   '/rooms/:room_id',
   roomIdValidator,
   updateRoomValidator,
-  isHandleByAdminOrRootAdmin,
+  isHandleByAdminOrStaff,
   roomController.updateRoom
 )
-roomRouter.delete('/rooms/:room_id', roomIdValidator, isHandleByAdminOrRootAdmin, roomController.deleteRoom)
+roomRouter.delete('/rooms/:room_id', roomIdValidator, isHandleByAdminOrStaff, roomController.deleteRoom)
 
-// Routes cho quản lý resident trong phòng - chỉ admin
+// Routes cho quản lý resident trong phòng - chỉ admin hoặc staff
 roomRouter.post(
   '/rooms/:room_id/residents',
   roomIdValidator,
   addResidentToRoomValidator,
-  isHandleByAdminOrRootAdmin,
+  isHandleByAdminOrStaff,
   roomController.addResidentToRoom
 )
 roomRouter.delete(
   '/rooms/:room_id/residents',
   roomIdValidator,
   removeResidentFromRoomValidator,
-  isHandleByAdminOrRootAdmin,
+  isHandleByAdminOrStaff,
   roomController.removeResidentFromRoom
 )
 

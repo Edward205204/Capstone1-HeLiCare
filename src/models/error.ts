@@ -12,9 +12,11 @@ type ErrorWithStatusInterface = Record<
 export class ErrorWithStatus {
   public status: number
   public message: string
-  constructor({ status, message }: { status: number; message: string }) {
+  public suggestions?: any
+  constructor({ status, message, suggestions }: { status: number; message: string; suggestions?: any }) {
     this.status = status
     this.message = message
+    this.suggestions = suggestions
   }
 }
 

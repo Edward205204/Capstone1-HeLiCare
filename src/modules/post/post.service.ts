@@ -102,7 +102,7 @@ class PostService {
         },
         distinct: ['institution_id'] // Chỉ lấy unique institution_ids
       })
-      finalInstitutionIds = familyLinks.map(link => link.institution_id)
+      finalInstitutionIds = familyLinks.map((link) => link.institution_id)
     }
 
     // Nếu vẫn không có institution_id, throw error
@@ -116,9 +116,7 @@ class PostService {
     // Build where clause với visibility filter cho Family
     const where: Prisma.PostWhereInput = {
       post_id,
-      institution_id: finalInstitutionIds.length === 1 
-        ? finalInstitutionIds[0] 
-        : { in: finalInstitutionIds }
+      institution_id: finalInstitutionIds.length === 1 ? finalInstitutionIds[0] : { in: finalInstitutionIds }
     }
 
     // Filter by visibility based on user role
@@ -219,7 +217,7 @@ class PostService {
         },
         distinct: ['institution_id'] // Chỉ lấy unique institution_ids
       })
-      finalInstitutionIds = familyLinks.map(link => link.institution_id)
+      finalInstitutionIds = familyLinks.map((link) => link.institution_id)
     }
 
     // Nếu vẫn không có institution_id, throw error
@@ -232,9 +230,7 @@ class PostService {
 
     // Build where clause - filter posts từ TẤT CẢ institutions mà user có quyền
     const where: Prisma.PostWhereInput = {
-      institution_id: finalInstitutionIds.length === 1 
-        ? finalInstitutionIds[0] 
-        : { in: finalInstitutionIds }
+      institution_id: finalInstitutionIds.length === 1 ? finalInstitutionIds[0] : { in: finalInstitutionIds }
     }
 
     // Filter by time
@@ -515,12 +511,11 @@ class PostService {
     })
   }
 
-  async toggleLikePost(post_id: string, user_id: string, institution_id: string) {
-    // Verify post exists
-    const post = await prisma.post.findFirst({
+  async toggleLikePost(post_id: string, user_id: string, institution_id: string | null) {
+    // Verify post exists (institution_id đã được validate bởi middleware)
+    const post = await prisma.post.findUnique({
       where: {
-        post_id,
-        institution_id
+        post_id
       }
     })
 
@@ -598,12 +593,11 @@ class PostService {
     }
   }
 
-  async addComment(post_id: string, user_id: string, content: string, institution_id: string) {
-    // Verify post exists
-    const post = await prisma.post.findFirst({
+  async addComment(post_id: string, user_id: string, content: string, institution_id: string | null) {
+    // Verify post exists (institution_id đã được validate bởi middleware)
+    const post = await prisma.post.findUnique({
       where: {
-        post_id,
-        institution_id
+        post_id
       }
     })
 
@@ -643,7 +637,13 @@ class PostService {
     return this.formatCommentResponse(comment)
   }
 
-  async deleteComment(post_id: string, comment_id: string, user_id: string, institution_id: string) {
+  async deleteComment(
+    post_id: string,
+    comment_id: string,
+    user_id: string,
+    institution_id: string | null,
+    user_role?: string
+  ) {
     // Verify comment exists and belongs to post
     const comment = await prisma.comment.findFirst({
       where: {
@@ -666,7 +666,29 @@ class PostService {
       })
     }
 
-    if (comment.post.institution_id !== institution_id) {
+    // Check institution access (đã được validate bởi middleware, nhưng vẫn check lại để đảm bảo)
+    if (user_role === 'Family') {
+      // Family user: check institution_id từ family links
+      const familyLinks = await prisma.familyResidentLink.findMany({
+        where: {
+          family_user_id: user_id,
+          status: FamilyLinkStatus.active
+        },
+        select: {
+          institution_id: true
+        },
+        distinct: ['institution_id']
+      })
+
+      const allowedInstitutionIds = familyLinks.map((link) => link.institution_id)
+      if (!allowedInstitutionIds.includes(comment.post.institution_id)) {
+        throw new ErrorWithStatus({
+          message: 'Comment does not belong to this institution',
+          status: HTTP_STATUS.FORBIDDEN
+        })
+      }
+    } else if (institution_id && comment.post.institution_id !== institution_id) {
+      // Staff/Admin: check institution_id từ token
       throw new ErrorWithStatus({
         message: 'Comment does not belong to this institution',
         status: HTTP_STATUS.FORBIDDEN

@@ -168,6 +168,179 @@ class StaffController {
       data: staffList
     })
   }
+
+  getStaffById = async (req: Request, res: Response) => {
+    const { staff_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const staff = await this.staffService.getStaffById(staff_id, institution_id)
+    if (!staff) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({
+        message: 'Staff not found'
+      })
+      return
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Staff fetched successfully',
+      data: staff
+    })
+  }
+
+  getStaffResidents = async (req: Request, res: Response) => {
+    const { staff_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const residents = await this.staffService.getStaffResidents(staff_id, institution_id)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Staff residents fetched successfully',
+      data: residents
+    })
+  }
+
+  getStaffTasks = async (req: Request, res: Response) => {
+    const { staff_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const tasks = await this.staffService.getStaffTasks(staff_id, institution_id)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Staff tasks fetched successfully',
+      data: tasks
+    })
+  }
+
+  assignTaskToStaff = async (req: Request, res: Response) => {
+    const { staff_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const { task_type, resident_id, due_time, description, title } = req.body
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const task = await this.staffService.assignTaskToStaff(staff_id, institution_id, {
+      task_type,
+      resident_id,
+      due_time: new Date(due_time),
+      description,
+      title
+    })
+
+    res.status(HTTP_STATUS.CREATED).json({
+      message: 'Task assigned successfully',
+      data: task
+    })
+  }
+
+  markTaskDone = async (req: Request, res: Response) => {
+    const { task_id } = req.params
+    const staff_id = req.decoded_authorization?.user_id as string
+
+    if (!staff_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Staff ID not found in token'
+      })
+      return
+    }
+
+    try {
+      const task = await this.staffService.markTaskDone(task_id, staff_id)
+      res.status(HTTP_STATUS.OK).json({
+        message: 'Task marked as done successfully',
+        data: task
+      })
+    } catch (error) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({
+        message: (error as Error).message
+      })
+    }
+  }
+
+  getStaffPerformance = async (req: Request, res: Response) => {
+    const { staff_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const month = (req.query.month as string) || new Date().toISOString().slice(0, 7) // Default to current month
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const performance = await this.staffService.getStaffPerformance(staff_id, institution_id, month)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Staff performance fetched successfully',
+      data: performance
+    })
+  }
+
+  createIncident = async (req: Request, res: Response) => {
+    const staff_id = req.decoded_authorization?.user_id as string
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const { resident_id, type, description, severity } = req.body
+
+    if (!institution_id || !staff_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID or Staff ID not found in token'
+      })
+      return
+    }
+
+    const incident = await this.staffService.createIncident(staff_id, institution_id, {
+      resident_id,
+      type,
+      description,
+      severity
+    })
+
+    res.status(HTTP_STATUS.CREATED).json({
+      message: 'Incident reported successfully',
+      data: incident
+    })
+  }
+
+  getIncidents = async (req: Request, res: Response) => {
+    const staff_id = req.decoded_authorization?.user_id as string
+    const institution_id = req.decoded_authorization?.institution_id as string
+
+    if (!institution_id || !staff_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID or Staff ID not found in token'
+      })
+      return
+    }
+
+    const incidents = await this.staffService.getIncidents(staff_id, institution_id)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Incidents fetched successfully',
+      data: incidents
+    })
+  }
 }
 
 export const staffController = new StaffController()

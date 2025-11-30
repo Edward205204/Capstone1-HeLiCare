@@ -38,7 +38,7 @@ export const confirmPasswordSchema: ParamSchema = {
   ...passwordSchema,
   custom: {
     options: (value, { req }) => {
-      if (value !== req.body.password) {
+      if (value !== req.body.password && value !== req.body.new_password) {
         throw new Error('Confirm password must be the same as password')
       }
       return true

@@ -9,8 +9,6 @@ import visitRouter from './modules/visit/visit.route'
 import activityRouter from './modules/activity/activity.route'
 import careLogRouter from './modules/carelog/carelog.route'
 import scheduleRouter from './modules/schedule/schedule.route'
-import servicePackageRouter from './modules/service-package/service-package.route'
-import contractRouter from './modules/contract/contract.route'
 import residentRouter from './modules/resident/resident.route'
 import assessmentRouter from './modules/assessment/assessment.route'
 import postRouter from './modules/post/post.route'
@@ -18,6 +16,11 @@ import mediaRouter from './modules/media/media.route'
 import { env } from './utils/dot.env'
 import { initFolder } from './utils/file'
 import staffRouter from './modules/staff/staff.route'
+import feedbackRouter from './modules/feedback/feedback.route'
+import notificationCenterRouter from './modules/notification-center/notification-center.route'
+import menuPlannerRouter from './modules/menu-planner/menu-planner.route'
+import medicationCarePlanRouter from './modules/medication-careplan/medication-careplan.route'
+import eventRouter from './modules/event/event.route'
 const app = express()
 const httpServer = createServer(app)
 const PORT = env.PORT || 3000
@@ -37,13 +40,26 @@ app.use('/api/rooms', roomRouter)
 app.use('/api/activities', activityRouter)
 app.use('/api/carelogs', careLogRouter)
 app.use('/api/schedules', scheduleRouter)
-app.use('/api/service-packages', servicePackageRouter)
-app.use('/api/contracts', contractRouter)
 app.use('/api/residents', residentRouter)
 app.use('/api/assessments', assessmentRouter)
 app.use('/api/posts', postRouter)
 app.use('/api/media', mediaRouter)
 app.use('/api/staff', staffRouter)
+app.use('/api/feedbacks', feedbackRouter)
+app.use('/api/notifications', notificationCenterRouter)
+app.use(
+  '/api/menu-planner',
+  (req, res, next) => {
+    console.log('=== MENU PLANNER ROUTER ===')
+    console.log('Request URL:', req.url)
+    console.log('Request method:', req.method)
+    console.log('Request path:', req.path)
+    next()
+  },
+  menuPlannerRouter
+)
+app.use('/api/medication-careplan', medicationCarePlanRouter)
+app.use('/api/events', eventRouter)
 app.use(defaultErrorHandler)
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`)

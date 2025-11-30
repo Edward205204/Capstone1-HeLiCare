@@ -13,6 +13,13 @@ router.get('/statistics', accessTokenValidator, careLogController.getCareLogStat
 
 router.get('/resident/:resident_id', accessTokenValidator, checkResidentAccess, careLogController.getCareLogsByResident)
 
+router.get(
+  '/resident/:resident_id/meals',
+  accessTokenValidator,
+  checkResidentAccess,
+  careLogController.getMealCareLogsByResident
+)
+
 router.get('/staff/:staff_id', accessTokenValidator, checkStaffAccess, careLogController.getCareLogsByStaff)
 
 router.get(

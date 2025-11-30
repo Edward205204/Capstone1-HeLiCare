@@ -122,4 +122,60 @@ staffRouter.post(
  */
 staffRouter.get('/staff', accessTokenValidator, wrapRequestHandler(staffController.getStaffList))
 
+/**
+ * @description Get staff detail by ID
+ * @method GET
+ * @path /staff/:staff_id
+ */
+staffRouter.get('/:staff_id', accessTokenValidator, wrapRequestHandler(staffController.getStaffById))
+
+/**
+ * @description Get residents assigned to staff
+ * @method GET
+ * @path /staff/:staff_id/residents
+ */
+staffRouter.get('/:staff_id/residents', accessTokenValidator, wrapRequestHandler(staffController.getStaffResidents))
+
+/**
+ * @description Get tasks assigned to staff
+ * @method GET
+ * @path /staff/:staff_id/tasks
+ */
+staffRouter.get('/:staff_id/tasks', accessTokenValidator, wrapRequestHandler(staffController.getStaffTasks))
+
+/**
+ * @description Assign task to staff
+ * @method POST
+ * @path /staff/:staff_id/assign-task
+ */
+staffRouter.post('/:staff_id/assign-task', accessTokenValidator, wrapRequestHandler(staffController.assignTaskToStaff))
+
+/**
+ * @description Mark task as done
+ * @method PATCH
+ * @path /staff/tasks/:task_id/done
+ */
+staffRouter.patch('/tasks/:task_id/done', accessTokenValidator, wrapRequestHandler(staffController.markTaskDone))
+
+/**
+ * @description Get staff performance
+ * @method GET
+ * @path /staff/:staff_id/performance?month=YYYY-MM
+ */
+staffRouter.get('/:staff_id/performance', accessTokenValidator, wrapRequestHandler(staffController.getStaffPerformance))
+
+/**
+ * @description Create incident report
+ * @method POST
+ * @path /staff/incident
+ */
+staffRouter.post('/incident', accessTokenValidator, wrapRequestHandler(staffController.createIncident))
+
+/**
+ * @description Get incidents
+ * @method GET
+ * @path /staff/incidents
+ */
+staffRouter.get('/incidents', accessTokenValidator, wrapRequestHandler(staffController.getIncidents))
+
 export default staffRouter

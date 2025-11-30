@@ -4,6 +4,7 @@ import {
   isHandleByFamily,
   isHandleByAdminOrStaff,
   createVisitValidator,
+  checkTimeOrTimeBlock,
   updateVisitValidator,
   visitIdValidator,
   approveVisitValidator,
@@ -15,10 +16,18 @@ import {
   cancelVisitValidator
 } from './visit.middleware'
 import { accessTokenValidator } from '../auth/auth.middleware'
+import { isHandleByResidentValidator } from '~/common/common.middleware'
 
 const visitRouter = Router()
 
-visitRouter.post('/visits', accessTokenValidator, isHandleByFamily, createVisitValidator, visitController.createVisit)
+visitRouter.post(
+  '/visits',
+  accessTokenValidator,
+  isHandleByFamily,
+  checkTimeOrTimeBlock,
+  createVisitValidator,
+  visitController.createVisit
+)
 visitRouter.get('/visits', accessTokenValidator, getVisitsByFamilyValidator, visitController.getVisitsByFamily)
 visitRouter.get('/visits/:visit_id', accessTokenValidator, visitIdValidator, visitController.getVisitById)
 visitRouter.patch(
@@ -73,6 +82,14 @@ visitRouter.post(
   isHandleByFamily,
   cancelVisitValidator,
   visitController.cancelVisit
+)
+
+// Get visits by resident (for Resident role)
+visitRouter.get(
+  '/resident/visits',
+  accessTokenValidator,
+  isHandleByResidentValidator,
+  visitController.getVisitsByResident
 )
 
 export default visitRouter

@@ -8,8 +8,6 @@ import {
   GetAssessmentQueryParams
 } from './assessment.dto'
 import { TIME_STATUS } from '~/constants/time-status'
-import omitBy from 'lodash/omitBy'
-import isNil from 'lodash/isNil'
 
 class AssessmentService {
   constructor() {}
@@ -311,6 +309,95 @@ class AssessmentService {
     return { data, total }
   }
 
+  // Helper function to calculate shift from date
+  private getShiftFromDate(date: Date): string {
+    const h = date.getHours()
+    // Morning 06:00 - 13:59, Afternoon 14:00 - 21:59, Night 22:00 - 05:59
+    if (h >= 6 && h < 14) return 'Morning'
+    if (h >= 14 && h < 22) return 'Afternoon'
+    return 'Night'
+  }
+
+  // Helper function to check vital signs and determine severity
+  private checkVitalSigns(assessment: {
+    temperature_c?: number | null
+    blood_pressure_systolic?: number | null
+    blood_pressure_diastolic?: number | null
+    heart_rate?: number | null
+    respiratory_rate?: number | null
+    oxygen_saturation?: number | null
+  }): { hasCritical: boolean; hasWarning: boolean; alerts: string[] } {
+    const alerts: string[] = []
+    let hasCritical = false
+    let hasWarning = false
+
+    // Blood pressure checks
+    if (assessment.blood_pressure_systolic) {
+      if (assessment.blood_pressure_systolic <= 80 || assessment.blood_pressure_systolic >= 160) {
+        hasCritical = true
+        alerts.push(`Huyết áp tâm thu ${assessment.blood_pressure_systolic} mmHg - Mức nguy hiểm`)
+      } else if (assessment.blood_pressure_systolic < 90 || assessment.blood_pressure_systolic >= 140) {
+        hasWarning = true
+        alerts.push(`Huyết áp tâm thu ${assessment.blood_pressure_systolic} mmHg - Cần theo dõi`)
+      }
+    }
+    if (assessment.blood_pressure_diastolic) {
+      if (assessment.blood_pressure_diastolic <= 50 || assessment.blood_pressure_diastolic >= 100) {
+        hasCritical = true
+        alerts.push(`Huyết áp tâm trương ${assessment.blood_pressure_diastolic} mmHg - Mức nguy hiểm`)
+      } else if (assessment.blood_pressure_diastolic < 60 || assessment.blood_pressure_diastolic >= 90) {
+        hasWarning = true
+        alerts.push(`Huyết áp tâm trương ${assessment.blood_pressure_diastolic} mmHg - Cần theo dõi`)
+      }
+    }
+
+    // Heart rate checks
+    if (assessment.heart_rate) {
+      if (assessment.heart_rate <= 40 || assessment.heart_rate >= 130) {
+        hasCritical = true
+        alerts.push(`Nhịp tim ${assessment.heart_rate} bpm - Mức nguy hiểm`)
+      } else if (assessment.heart_rate < 50 || assessment.heart_rate >= 100) {
+        hasWarning = true
+        alerts.push(`Nhịp tim ${assessment.heart_rate} bpm - Cần theo dõi`)
+      }
+    }
+
+    // Temperature checks
+    if (assessment.temperature_c) {
+      if (assessment.temperature_c <= 34 || assessment.temperature_c >= 39) {
+        hasCritical = true
+        alerts.push(`Nhiệt độ ${assessment.temperature_c}°C - Mức nguy hiểm`)
+      } else if (assessment.temperature_c < 35 || assessment.temperature_c >= 37.5) {
+        hasWarning = true
+        alerts.push(`Nhiệt độ ${assessment.temperature_c}°C - Cần theo dõi`)
+      }
+    }
+
+    // Respiratory rate checks
+    if (assessment.respiratory_rate) {
+      if (assessment.respiratory_rate <= 8 || assessment.respiratory_rate >= 30) {
+        hasCritical = true
+        alerts.push(`Nhịp thở ${assessment.respiratory_rate} lần/phút - Mức nguy hiểm`)
+      } else if (assessment.respiratory_rate < 12 || assessment.respiratory_rate >= 20) {
+        hasWarning = true
+        alerts.push(`Nhịp thở ${assessment.respiratory_rate} lần/phút - Cần theo dõi`)
+      }
+    }
+
+    // SpO2 checks
+    if (assessment.oxygen_saturation) {
+      if (assessment.oxygen_saturation < 90) {
+        hasCritical = true
+        alerts.push(`SpO₂ ${assessment.oxygen_saturation}% - Mức nguy hiểm`)
+      } else if (assessment.oxygen_saturation < 95) {
+        hasWarning = true
+        alerts.push(`SpO₂ ${assessment.oxygen_saturation}% - Cần theo dõi`)
+      }
+    }
+
+    return { hasCritical, hasWarning, alerts }
+  }
+
   // POST Methods
   createAssessment = async ({ resident_id, assessment, assessed_by_id }: CreateAssessmentParams) => {
     const {
@@ -325,8 +412,13 @@ class AssessmentService {
       heart_rate,
       respiratory_rate,
       oxygen_saturation,
-      notes
+      notes,
+      measured_at
     } = assessment
+
+    // Calculate shift from measured_at
+    const measuredAtDate = measured_at ? new Date(measured_at) : new Date()
+    const measurement_shift = this.getShiftFromDate(measuredAtDate)
 
     // Nếu có height/weight, update vào Resident (vì chỉ nhập một lần)
     // Calculate BMI if weight and height are provided
@@ -355,22 +447,82 @@ class AssessmentService {
         assessed_by_id,
         cognitive_status: cognitive_status as any,
         mobility_status: mobility_status as any,
-        // Không lưu weight_kg, height_cm, bmi vào assessment nữa
         temperature_c,
         blood_pressure_systolic,
         blood_pressure_diastolic,
         heart_rate,
         respiratory_rate,
         oxygen_saturation,
-        notes
+        notes,
+        measured_at: measuredAtDate,
+        measurement_shift
       }
     })
+
+    // Check vital signs for alerts
+    const vitalCheck = this.checkVitalSigns({
+      temperature_c,
+      blood_pressure_systolic,
+      blood_pressure_diastolic,
+      heart_rate,
+      respiratory_rate,
+      oxygen_saturation
+    })
+
+    // TODO: Implement notification system to send alerts to family and staff
+    // For now, we log the alerts. The notification system should be implemented
+    // to create notifications in the database and send them via email/push notifications
+    if (vitalCheck.hasCritical || vitalCheck.hasWarning) {
+      const severity = vitalCheck.hasCritical ? 'critical' : 'warning'
+      const message = vitalCheck.alerts.join('; ')
+
+      // Log for now - notification system will be implemented separately
+      console.log(`[VITAL SIGN ALERT] Resident: ${resident_id}, Severity: ${severity}, Alerts: ${message}`)
+
+      // Get resident info for future notification implementation
+      const resident = await prisma.resident.findUnique({
+        where: { resident_id },
+        include: {
+          familyResidentLinks: {
+            include: {
+              family_user: {
+                select: {
+                  user_id: true,
+                  email: true
+                }
+              }
+            }
+          },
+          institution: {
+            include: {
+              users: {
+                where: {
+                  role: 'Staff'
+                },
+                select: {
+                  user_id: true,
+                  email: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      // TODO: Create notifications in Notification table when model is available
+      // This will notify family members and staff about critical/warning vital signs
+    }
 
     return newAssessment
   }
 
   // PUT Methods
-  updateAssessment = async ({ assessment_id, assessment }: UpdateAssessmentParams) => {
+  updateAssessment = async ({
+    assessment_id,
+    assessment,
+    corrected_by_id,
+    correction_reason
+  }: UpdateAssessmentParams) => {
     const {
       cognitive_status,
       mobility_status,
@@ -383,13 +535,32 @@ class AssessmentService {
       heart_rate,
       respiratory_rate,
       oxygen_saturation,
-      notes
+      notes,
+      measured_at
     } = assessment
+
+    // Calculate shift from measured_at
+    const measuredAtDate = measured_at ? new Date(measured_at) : new Date()
+    const measurement_shift = this.getShiftFromDate(measuredAtDate)
 
     // Lấy resident_id từ assessment hiện tại
     const currentAssessment = await prisma.healthAssessment.findUnique({
       where: { assessment_id },
-      select: { resident_id: true }
+      select: {
+        resident_id: true,
+        cognitive_status: true,
+        mobility_status: true,
+        temperature_c: true,
+        blood_pressure_systolic: true,
+        blood_pressure_diastolic: true,
+        heart_rate: true,
+        respiratory_rate: true,
+        oxygen_saturation: true,
+        notes: true,
+        measured_at: true,
+        measurement_shift: true,
+        measurement_by: true
+      }
     })
 
     if (!currentAssessment) {
@@ -421,16 +592,41 @@ class AssessmentService {
       data: {
         cognitive_status: cognitive_status as any,
         mobility_status: mobility_status as any,
-        // Không lưu weight_kg, height_cm, bmi vào assessment nữa
         temperature_c,
         blood_pressure_systolic,
         blood_pressure_diastolic,
         heart_rate,
         respiratory_rate,
         oxygen_saturation,
-        notes
+        notes,
+        measured_at: measuredAtDate,
+        measurement_shift
       }
     })
+
+    if (corrected_by_id) {
+      await correctionLogService.recordFieldCorrections({
+        source_type: CorrectionSourceType.Assessment,
+        source_id: assessment_id,
+        corrected_by_id,
+        reason: correction_reason,
+        before: currentAssessment,
+        after: updatedAssessment,
+        fields: [
+          'cognitive_status',
+          'mobility_status',
+          'temperature_c',
+          'blood_pressure_systolic',
+          'blood_pressure_diastolic',
+          'heart_rate',
+          'respiratory_rate',
+          'oxygen_saturation',
+          'notes',
+          'measured_at',
+          'measurement_shift'
+        ]
+      })
+    }
 
     return updatedAssessment
   }

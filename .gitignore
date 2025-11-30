@@ -3,4 +3,4 @@ dist/
 
 /generated/prisma
 uploads/
-*.env
+.env

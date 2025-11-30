@@ -52,7 +52,8 @@ export const createAssessmentSchema = [
     .optional()
     .isString()
     .isLength({ max: 1000 })
-    .withMessage('Notes must be a string with maximum 1000 characters')
+    .withMessage('Notes must be a string with maximum 1000 characters'),
+  body('assessment.measured_at').optional().isISO8601().withMessage('Measured at must be a valid ISO 8601 date')
 ]
 
 export const updateAssessmentSchema = [
@@ -106,7 +107,8 @@ export const updateAssessmentSchema = [
     .optional()
     .isString()
     .isLength({ max: 1000 })
-    .withMessage('Notes must be a string with maximum 1000 characters')
+    .withMessage('Notes must be a string with maximum 1000 characters'),
+  body('assessment.measured_at').optional().isISO8601().withMessage('Measured at must be a valid ISO 8601 date')
 ]
 
 export const getAssessmentByIdSchema = [

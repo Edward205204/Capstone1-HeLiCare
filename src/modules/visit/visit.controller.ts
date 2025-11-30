@@ -14,15 +14,26 @@ import {
 class VisitController {
   // Tạo lịch hẹn thăm viếng
   createVisit = async (req: Request, res: Response) => {
-    const family_user_id = req.decoded_authorization?.user_id as string
-    const visitData: CreateVisitReqBody = req.body
+    try {
+      const family_user_id = req.decoded_authorization?.user_id as string
+      const visitData: CreateVisitReqBody = req.body
 
-    const visit = await visitService.createVisit(family_user_id, visitData)
+      const visit = await visitService.createVisit(family_user_id, visitData)
 
-    res.status(HTTP_STATUS.CREATED).json({
-      message: 'Visit scheduled successfully',
-      data: visit
-    })
+      res.status(HTTP_STATUS.CREATED).json({
+        message: 'Visit scheduled successfully',
+        data: visit
+      })
+    } catch (error: any) {
+      if (error.suggestions) {
+        res.status(error.status || HTTP_STATUS.BAD_REQUEST).json({
+          message: error.message,
+          suggestions: error.suggestions
+        })
+      } else {
+        throw error
+      }
+    }
   }
 
   // Lấy danh sách lịch hẹn của family
@@ -170,6 +181,31 @@ class VisitController {
     res.status(HTTP_STATUS.OK).json({
       message: 'Visit cancelled successfully',
       data: visit
+    })
+  }
+
+  // Lấy danh sách lịch hẹn của resident (cho Resident role)
+  getVisitsByResident = async (req: Request, res: Response) => {
+    const resident_id = req.decoded_authorization?.resident_id as string
+    const { status, limit = 100, offset = 0 } = req.query
+
+    if (!resident_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Resident ID not found in token'
+      })
+      return
+    }
+
+    const visits = await visitService.getVisitsByResident(
+      resident_id,
+      status as any,
+      Number(limit),
+      Number(offset)
+    )
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Get visits successfully',
+      data: visits
     })
   }
 }

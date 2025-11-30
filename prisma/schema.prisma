@@ -55,35 +55,6 @@ enum NotificationType {
   VisitReminder
 }
 
-enum ServiceType {
-  base
-  add_on
-  special
-}
-
-enum ContractStatus {
-  active
-  expired
-  cancelled
-}
-
-enum ContractServiceStatus {
-  active
-  expired
-  cancelled
-}
-
-enum PaymentFrequency {
-  monthly
-  annually
-}
-
-enum PaymentStatus {
-  paid
-  overdue
-  pending
-}
-
 enum SpecialCareStatus {
   suggested
   accepted
@@ -106,6 +77,12 @@ enum VisitStatus {
   checked_in
   completed
   cancelled
+}
+
+enum VisitTimeBlock {
+  morning
+  afternoon
+  evening
 }
 
 enum InvitationStatus {
@@ -173,16 +150,15 @@ enum RoomType {
   multi
 }
 
-enum PaymentMethod {
-  // cash
-  // bank_transfer
-  paypal
-}
-
 enum FamilyLinkStatus {
   pending
   active
   revoked
+}
+
+enum CorrectionSourceType {
+  Assessment
+  CareLog
 }
 
 enum TokenType {
@@ -235,6 +211,37 @@ enum AllergySeverity {
   SEVERE
 }
 
+enum MealSlot {
+  Breakfast
+  Lunch
+  Afternoon
+  Dinner
+}
+
+enum DishTexture {
+  Regular
+  Minced
+  Pureed
+}
+
+enum IngredientUnit {
+  g
+  ml
+  pcs
+}
+
+enum DietTagType {
+  LowSugar // Đái tháo đường
+  LowSodium // Tăng huyết áp
+  SoftTexture // Khó nuốt / Dysphagia
+  HighProtein // Thiếu protein
+  LowFat // Bệnh tim mạch
+  HighFiber // Táo bón
+  GlutenFree // Dị ứng gluten
+  LactoseFree // Dị ứng lactose
+  Custom // Tag tùy chỉnh
+}
+
 model Institution {
   institution_id String                    @id @default(uuid())
   name           String
@@ -257,9 +264,15 @@ model Institution {
   visitConfiguration   VisitConfiguration?
   visitTimeSlots       VisitTimeSlot[]
   visitDailyStats      VisitDailyStats[]
-  servicePackages      ServicePackage[]
-  contracts            Contract[]
   posts                Post[]
+  feedbacks            Feedback[]
+  feedbackCategories   FeedbackCategory[]
+  dishes               Dish[]
+  ingredients          Ingredient[]
+  weeklyMenus          WeeklyMenu[]
+  medications          Medication[]
+  medicationCarePlans  MedicationCarePlanAssignment[]
+  events               Event[]
 }
 
 model User {
@@ -272,23 +285,28 @@ model User {
   created_at     DateTime   @default(now())
   updated_at     DateTime   @updatedAt
 
-  institution         Institution?         @relation(fields: [institution_id], references: [institution_id])
+  institution         Institution?           @relation(fields: [institution_id], references: [institution_id])
   familyProfile       FamilyProfile?
   userTokens          UserToken[]
   // residentApplication      ResidentApplication[]
-  assignedResidents   Resident[]           @relation("AssignedStaff")
-  resident            Resident?            @relation("ResidentUser")
+  assignedResidents   Resident[]             @relation("AssignedStaff")
+  resident            Resident?              @relation("ResidentUser")
   staffProfile        StaffProfile?
   familyResidentLinks FamilyResidentLink[]
-  familyVisits        Visit[]              @relation("FamilyVisits")
-  approvedVisits      Visit[]              @relation("VisitApprover")
-  healthAssessments   HealthAssessment[]   @relation("StaffAssessments")
-  staffSchedules      Schedule[]           @relation("StaffSchedules")
-  staffCareLogs       CareLog[]            @relation("StaffCareLogs")
-  familyContracts     Contract[]           @relation("FamilyContracts")
-  posts               Post[]               @relation("PostAuthor")
-  postLikes           PostLike[]           @relation("PostLikes")
-  comments            Comment[]            @relation("CommentAuthor")
+  familyVisits        Visit[]                @relation("FamilyVisits")
+  approvedVisits      Visit[]                @relation("VisitApprover")
+  healthAssessments   HealthAssessment[]     @relation("StaffAssessments")
+  staffSchedules      Schedule[]             @relation("StaffSchedules")
+  staffCareLogs       CareLog[]              @relation("StaffCareLogs")
+  posts               Post[]                 @relation("PostAuthor")
+  postLikes           PostLike[]             @relation("PostLikes")
+  comments            Comment[]              @relation("CommentAuthor")
+  healthCorrections   HealthDataCorrection[]
+  familyFeedbacks     Feedback[]             @relation("FamilyFeedback")
+  assignedFeedbacks   Feedback[]             @relation("AssignedFeedbackStaff")
+  createdMenus        WeeklyMenu[]           @relation("MenuCreator")
+  familyNotificationState FamilyNotificationState?
+  familyNotificationReads FamilyNotificationRead[]
 }
 
 model StaffProfile {
@@ -364,8 +382,9 @@ model Resident {
   healthAssessments   HealthAssessment[]
   schedules           Schedule[]
   careLogs            CareLog[]
-  contracts           Contract[]
   postResidents       PostResident[]       @relation("PostResidents")
+  dietTags            ResidentDietTag[]
+  feedbacks           Feedback[]
 }
 
 model HealthAssessment {
@@ -386,13 +405,17 @@ model HealthAssessment {
   respiratory_rate         Int?
   oxygen_saturation        Int?
 
-  notes      String?
-  created_at DateTime @default(now())
+  notes             String?
+  measured_at       DateTime @default(now())
+  measurement_shift String?
+  measurement_by    String?
+  created_at        DateTime @default(now())
 
   resident    Resident @relation(fields: [resident_id], references: [resident_id])
   assessed_by User     @relation("StaffAssessments", fields: [assessed_by_id], references: [user_id])
 
   @@index([resident_id])
+  @@index([resident_id, measured_at])
 }
 
 // Bệnh mãn tính
@@ -434,7 +457,6 @@ model Room {
 
   institution Institution @relation(fields: [institution_id], references: [institution_id])
   residents   Resident[]
-  contracts   Contract[]
 }
 
 model FamilyResidentLink {
@@ -561,24 +583,25 @@ model CareLog {
 }
 
 model Visit {
-  visit_id       String      @id @default(uuid())
+  visit_id       String          @id @default(uuid())
   family_user_id String
   resident_id    String
   institution_id String
   visit_date     DateTime
-  visit_time     String // Format: "HH:MM" (e.g., "09:00", "14:30")
+  visit_time     String? // Format: "HH:MM" (e.g., "09:00", "14:30") - deprecated, use time_block instead
+  time_block     VisitTimeBlock? // Time block: morning, afternoon, evening
   duration       Int // Duration in minutes (default 60)
   purpose        String? // Purpose of visit
   notes          String? // Additional notes
-  status         VisitStatus @default(pending)
+  status         VisitStatus     @default(pending)
   approved_by    String? // User ID who approved (Admin/Staff)
   approved_at    DateTime?
   checked_in_at  DateTime? // Thời gian check-in
   checked_out_at DateTime? // Thời gian check-out
   qr_code_data   String? // QR code data (JWT hoặc visit_id)
   qr_expires_at  DateTime? // Thời gian hết hạn QR code
-  created_at     DateTime    @default(now())
-  updated_at     DateTime    @updatedAt
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
 
   family_user User        @relation("FamilyVisits", fields: [family_user_id], references: [user_id])
   resident    Resident    @relation(fields: [resident_id], references: [resident_id])
@@ -586,9 +609,11 @@ model Visit {
   approver    User?       @relation("VisitApprover", fields: [approved_by], references: [user_id])
   visit_slot  VisitSlot?
 
-  @@unique([family_user_id, visit_date, visit_time])
+  @@unique([family_user_id, resident_id, visit_date, visit_time])
+  @@unique([family_user_id, resident_id, visit_date, time_block])
   @@index([visit_date, status])
   @@index([institution_id, visit_date])
+  @@index([institution_id, visit_date, time_block])
   @@index([qr_code_data])
 }
 
@@ -599,6 +624,7 @@ model VisitConfiguration {
   max_visitors_per_day               Int      @default(100)
   max_visitors_per_slot              Int      @default(50)
   max_visitors_per_resident_per_slot Int      @default(3)
+  max_visitors_per_time_block        Int      @default(20) // Max visitors per time block (morning/afternoon/evening)
   advance_booking_days               Int      @default(14) // Số ngày trước có thể đặt lịch
   cancellation_hours                 Int      @default(2) // Số giờ trước có thể hủy
   created_at                         DateTime @default(now())
@@ -651,96 +677,20 @@ model VisitDailyStats {
   @@index([institution_id, visit_date])
 }
 
-// Service Package & Contract Models
-model ServicePackage {
-  package_id     String      @id @default(uuid())
-  institution_id String
-  name           String
-  description    String?
-  type           ServiceType @default(base)
+model HealthDataCorrection {
+  correction_id   String               @id @default(uuid())
+  source_type     CorrectionSourceType
+  source_id       String
+  field           String
+  previous_value  String?
+  new_value       String?
+  reason          String?
+  corrected_by_id String
+  created_at      DateTime             @default(now())
 
-  // Pricing
-  price_monthly  Float
-  price_annually Float?
+  corrected_by User @relation(fields: [corrected_by_id], references: [user_id])
 
-  // Room related
-  room_type     RoomType?
-  includes_room Boolean   @default(false)
-
-  // Service details
-  features      Json? // Danh sách tính năng
-  max_residents Int? // Giới hạn số resident (nếu có)
-
-  // Status
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  institution      Institution       @relation(fields: [institution_id], references: [institution_id])
-  contractServices ContractService[]
-
-  @@index([institution_id, type])
-  @@index([is_active])
-}
-
-model Contract {
-  contract_id    String  @id @default(uuid())
-  institution_id String
-  resident_id    String
-  family_user_id String?
-
-  // Contract info
-  contract_number String         @unique
-  status          ContractStatus @default(active)
-
-  // Payment info
-  payment_frequency PaymentFrequency
-  total_amount      Float
-
-  // Dates
-  start_date  DateTime
-  end_date    DateTime?
-  signed_date DateTime?
-
-  // Room assignment
-  room_id String?
-
-  notes      String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  institution      Institution       @relation(fields: [institution_id], references: [institution_id])
-  resident         Resident          @relation(fields: [resident_id], references: [resident_id])
-  family_user      User?             @relation("FamilyContracts", fields: [family_user_id], references: [user_id])
-  room             Room?             @relation(fields: [room_id], references: [room_id])
-  contractServices ContractService[]
-
-  @@index([institution_id, status])
-  @@index([resident_id])
-  @@index([contract_number])
-}
-
-model ContractService {
-  contract_service_id String @id @default(uuid())
-  contract_id         String
-  package_id          String
-
-  status           ContractServiceStatus @default(active)
-  price_at_signing Float // Giá tại thời điểm ký
-
-  start_date DateTime
-  end_date   DateTime?
-
-  notes      String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  contract Contract       @relation(fields: [contract_id], references: [contract_id])
-  package  ServicePackage @relation(fields: [package_id], references: [package_id])
-
-  @@index([contract_id])
-  @@index([package_id])
-  @@index([status])
+  @@index([source_type, source_id])
 }
 
 enum VideoEncodeStatus {
@@ -840,4 +790,322 @@ model Comment {
 
   @@index([post_id, created_at])
   @@index([user_id])
+}
+
+enum FeedbackStatus {
+  pending
+  in_progress
+  resolved
+}
+
+model FeedbackCategory {
+  category_id    String   @id @default(uuid())
+  institution_id String
+  name           String
+  description    String?
+  metadata       Json? // e.g., { requiredFields: [], attachmentsRequired: boolean, urgency: string, contactMethod: string, types: string[] }
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+  feedbacks   Feedback[]
+
+  @@index([institution_id])
+  @@index([institution_id, is_active])
+}
+
+model Feedback {
+  feedback_id       String         @id @default(uuid())
+  family_user_id    String
+  resident_id       String?
+  institution_id    String
+  category_id       String
+  type              String? // Dynamic subtype per category
+  message           String
+  attachments       String[] // Array of attachment URLs
+  status            FeedbackStatus @default(pending)
+  staff_notes       String?
+  assigned_staff_id String?
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+  resolved_at       DateTime?
+
+  family_user    User             @relation("FamilyFeedback", fields: [family_user_id], references: [user_id])
+  resident       Resident?        @relation(fields: [resident_id], references: [resident_id])
+  institution    Institution      @relation(fields: [institution_id], references: [institution_id])
+  category       FeedbackCategory @relation(fields: [category_id], references: [category_id])
+  assigned_staff User?            @relation("AssignedFeedbackStaff", fields: [assigned_staff_id], references: [user_id])
+
+  @@index([family_user_id, created_at])
+  @@index([institution_id, status])
+  @@index([institution_id, category_id])
+  @@index([resident_id])
+  @@index([status])
+  @@index([category_id])
+}
+
+// Trạng thái thông báo của family user (mốc đã xem gần nhất)
+model FamilyNotificationState {
+  user_id      String   @id
+  last_seen_at DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@index([last_seen_at])
+}
+
+// Lưu notification đã đọc theo từng notification_id (fb:..., post:..., health:...)
+model FamilyNotificationRead {
+  read_id         String   @id @default(uuid())
+  user_id         String
+  notification_id String
+  created_at      DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@unique([user_id, notification_id])
+  @@index([user_id])
+}
+
+// Menu Planner Models
+model Dish {
+  dish_id           String      @id @default(uuid())
+  institution_id    String
+  name              String
+  calories_per_100g Float
+  texture           DishTexture @default(Regular)
+  sugar_adjustable  Boolean     @default(false)
+  sodium_level      Float? // mg per 100g
+  dietary_flags     Json? // Array of dietary flags: ["diabetic", "low_sodium", "gluten_free", etc.]
+  is_blendable      Boolean     @default(false) // Can be blended to create variants
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+
+  institution     Institution      @relation(fields: [institution_id], references: [institution_id])
+  dishIngredients DishIngredient[]
+  weeklyMenuItems WeeklyMenuItem[]
+
+  @@index([institution_id])
+  @@index([texture])
+}
+
+model Ingredient {
+  ingredient_id     String         @id @default(uuid())
+  institution_id    String
+  name              String
+  unit              IngredientUnit
+  calories_per_100g Float
+  protein_per_100g  Float          @default(0)
+  fat_per_100g      Float          @default(0)
+  carbs_per_100g    Float          @default(0)
+  fiber_per_100g    Float?         @default(0)
+  sodium_per_100g   Float?         @default(0)
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+
+  institution     Institution      @relation(fields: [institution_id], references: [institution_id])
+  dishIngredients DishIngredient[]
+
+  @@index([institution_id])
+}
+
+model DishIngredient {
+  dish_ingredient_id String @id @default(uuid())
+  dish_id            String
+  ingredient_id      String
+  amount             Float // Amount in the unit of the ingredient (g/ml/pcs)
+
+  dish       Dish       @relation(fields: [dish_id], references: [dish_id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredient_id], references: [ingredient_id], onDelete: Cascade)
+
+  @@unique([dish_id, ingredient_id])
+  @@index([dish_id])
+  @@index([ingredient_id])
+}
+
+model WeeklyMenu {
+  menu_id         String   @id @default(uuid())
+  institution_id  String
+  week_start_date DateTime // Monday of the week
+  week_end_date   DateTime // Sunday of the week
+  created_by_id   String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  institution Institution      @relation(fields: [institution_id], references: [institution_id])
+  created_by  User             @relation("MenuCreator", fields: [created_by_id], references: [user_id])
+  menuItems   WeeklyMenuItem[]
+
+  @@unique([institution_id, week_start_date])
+  @@index([institution_id, week_start_date])
+}
+
+model WeeklyMenuItem {
+  menu_item_id    String       @id @default(uuid())
+  menu_id         String
+  dish_id         String
+  meal_slot       MealSlot
+  day_of_week     Int // 0 = Monday, 6 = Sunday
+  servings        Int // Number of servings
+  texture_variant DishTexture? // Override texture for this specific menu item
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  menu WeeklyMenu @relation(fields: [menu_id], references: [menu_id], onDelete: Cascade)
+  dish Dish       @relation(fields: [dish_id], references: [dish_id])
+
+  @@index([menu_id, day_of_week, meal_slot])
+  @@index([dish_id])
+}
+
+// Diet Tags for Residents - Auto-assigned based on Vital Signs & Medical Records
+model ResidentDietTag {
+  tag_id      String      @id @default(uuid())
+  resident_id String
+  tag_type    DietTagType
+  tag_name    String // Human-readable name (e.g., "Low Sugar", "Soft Texture")
+  source_type String // "vital_sign", "medical_record", "manual_override"
+  source_id   String? // ID of the source (assessment_id, etc.)
+  assigned_at DateTime    @default(now())
+  expires_at  DateTime? // Optional expiration (null = permanent until removed)
+  is_active   Boolean     @default(true)
+  notes       String?
+
+  resident Resident @relation(fields: [resident_id], references: [resident_id], onDelete: Cascade)
+
+  @@unique([resident_id, tag_type])
+  @@index([resident_id, is_active])
+  @@index([tag_type])
+  @@index([is_active])
+}
+
+// Medication Management Models
+enum MedicationForm {
+  tablet
+  syrup
+  injection
+  capsule
+  liquid
+  cream
+  other
+}
+
+enum MedicationTiming {
+  before_meal
+  after_meal
+  with_meal
+  any_time
+}
+
+model Medication {
+  medication_id  String           @id @default(uuid())
+  institution_id String
+  name           String
+  dosage         String // e.g., "100mg", "5ml"
+  form           MedicationForm   @default(tablet)
+  frequency      String // e.g., "Twice daily", "Once daily", "Three times daily"
+  timing         MedicationTiming @default(any_time)
+  instructions   String? // Additional instructions
+  is_active      Boolean          @default(true)
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+
+  institution Institution                    @relation(fields: [institution_id], references: [institution_id])
+  assignments MedicationCarePlanAssignment[]
+
+  @@index([institution_id])
+  @@index([is_active])
+}
+
+enum TimeSlot {
+  morning
+  noon
+  afternoon
+  evening
+}
+
+model MedicationCarePlanAssignment {
+  assignment_id  String @id @default(uuid())
+  medication_id  String
+  institution_id String
+
+  // Assignment targets
+  resident_ids String[] // Array of resident UUIDs
+  room_ids     String[] // Array of room UUIDs
+  staff_ids    String[] // Array of staff UUIDs
+
+  // Schedule
+  start_date DateTime
+  end_date   DateTime?
+  time_slot  TimeSlot? // Optional time slot: morning, noon, afternoon, evening
+
+  // Status
+  is_active Boolean @default(true)
+
+  // Metadata
+  notes      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  medication  Medication  @relation(fields: [medication_id], references: [medication_id], onDelete: Cascade)
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+
+  @@index([medication_id])
+  @@index([institution_id])
+  @@index([is_active])
+  @@index([start_date, end_date])
+  @@index([time_slot])
+}
+
+enum EventType {
+  Care
+  Entertainment
+  Other
+}
+
+enum EventStatus {
+  Upcoming
+  Cancelled
+  Ongoing
+  Ended
+}
+
+enum CareSubType {
+  VitalCheck
+  Therapy
+  MedicationAdmin
+  Hygiene
+  Meal
+  Other
+}
+
+enum EventFrequency {
+  Daily
+  Weekly
+  Monthly
+  OneTime
+}
+
+model Event {
+  event_id       String   @id @default(uuid())
+  institution_id String
+  name           String
+  type           EventType
+  status         EventStatus @default(Upcoming)
+  start_time     DateTime
+  end_time       DateTime
+  location       String // Default to institution name
+  room_ids       String[] // Optional for special events
+  care_configuration Json? // { subType, frequency } - only for Care events
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+
+  @@index([institution_id])
+  @@index([institution_id, start_time])
+  @@index([status])
+  @@index([type])
 }

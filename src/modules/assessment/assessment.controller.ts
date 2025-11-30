@@ -2,9 +2,13 @@ import { HTTP_STATUS } from '~/constants/http_status'
 import { AssessmentService, assessmentService as assessmentServiceInstance } from './assessment.service'
 import { Request, Response } from 'express'
 import { GetAssessmentQueryParams } from './assessment.dto'
+import { HealthInsightService, healthInsightService as healthInsightServiceInstance } from './health-insight.service'
 
 class AssessmentController {
-  constructor(private readonly assessmentService: AssessmentService = assessmentServiceInstance) {}
+  constructor(
+    private readonly assessmentService: AssessmentService = assessmentServiceInstance,
+    private readonly healthInsightService: HealthInsightService = healthInsightServiceInstance
+  ) {}
 
   // GET Methods
   getAssessments = async (req: Request, res: Response) => {
@@ -62,6 +66,19 @@ class AssessmentController {
     })
   }
 
+  getHealthSummary = async (req: Request, res: Response) => {
+    const { resident_id } = req.params
+    const data = await this.healthInsightService.getHealthSummary({ resident_id })
+    if (!data) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ message: 'Resident not found' })
+      return
+    }
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Health summary fetched successfully',
+      data
+    })
+  }
+
   // POST Methods
   createAssessment = async (req: Request, res: Response) => {
     const { resident_id } = req.params
@@ -74,8 +91,14 @@ class AssessmentController {
   // PUT Methods
   updateAssessment = async (req: Request, res: Response) => {
     const { assessment_id } = req.params
-    const { assessment } = req.body
-    await this.assessmentService.updateAssessment({ assessment_id, assessment })
+    const { assessment, correction_reason } = req.body
+    const corrected_by_id = req.decoded_authorization?.user_id as string
+    await this.assessmentService.updateAssessment({
+      assessment_id,
+      assessment,
+      corrected_by_id,
+      correction_reason
+    })
     res.status(HTTP_STATUS.OK).json({ message: 'Assessment updated successfully' })
   }
 

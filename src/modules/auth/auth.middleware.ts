@@ -65,6 +65,65 @@ export const loginValidator = validate(
   )
 )
 
+export const residentLoginValidator = validate(
+  checkSchema(
+    {
+      username: {
+        notEmpty: {
+          errorMessage: 'Username is required'
+        },
+        isString: {
+          errorMessage: 'Username must be a string'
+        },
+        trim: true,
+        custom: {
+          options: async (value, { req }) => {
+            const user = await commonService.checkUsernameExist(value)
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Username does not exist',
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
+              })
+            }
+            // Check if user is a resident
+            if (user.role !== UserRole.Resident) {
+              throw new ErrorWithStatus({
+                message: 'This username is not for a resident account',
+                status: HTTP_STATUS.FORBIDDEN
+              })
+            }
+            req.user = user
+            return true
+          }
+        }
+      },
+      password: {
+        ...passwordSchema,
+        custom: {
+          options: async (value, { req }) => {
+            const user = (await commonService.checkUsernameExist(req.body.username)) as User
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: 'Username does not exist',
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
+              })
+            }
+            const isValidPassword = await verifyPassword(value, user.password)
+            if (!isValidPassword) {
+              throw new ErrorWithStatus({
+                message: 'Password is incorrect',
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
+              })
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
 export const resendEmailVerifyValidator = validate(
   checkSchema(
     {
@@ -242,6 +301,20 @@ export const resetPasswordValidator = validate(
       password: passwordSchema,
       confirm_password: confirmPasswordSchema,
       forgot_password_token: forgotPasswordTokenSchema
+    },
+    ['body']
+  )
+)
+
+export const changePasswordValidator = validate(
+  checkSchema(
+    {
+      current_password: passwordSchema,
+      new_password: {
+        ...passwordSchema,
+        ...isStrongPasswordSchema
+      },
+      confirm_password: confirmPasswordSchema
     },
     ['body']
   )

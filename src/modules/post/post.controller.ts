@@ -68,7 +68,7 @@ class PostController {
   toggleLikePost = async (req: Request, res: Response) => {
     const { post_id } = req.params
     const user_id = req.decoded_authorization?.user_id as string
-    const institution_id = req.decoded_authorization?.institution_id as string
+    const institution_id = req.decoded_authorization?.institution_id as string | null
 
     const data = await this.postService.toggleLikePost(post_id, user_id, institution_id)
     res.status(HTTP_STATUS.OK).json({ message: 'Post like toggled successfully', data })
@@ -77,7 +77,7 @@ class PostController {
   addComment = async (req: Request, res: Response) => {
     const { post_id } = req.params
     const user_id = req.decoded_authorization?.user_id as string
-    const institution_id = req.decoded_authorization?.institution_id as string
+    const institution_id = req.decoded_authorization?.institution_id as string | null
     const { content } = req.body as AddCommentBody
 
     const data = await this.postService.addComment(post_id, user_id, content, institution_id)
@@ -87,9 +87,10 @@ class PostController {
   deleteComment = async (req: Request, res: Response) => {
     const { post_id, comment_id } = req.params
     const user_id = req.decoded_authorization?.user_id as string
-    const institution_id = req.decoded_authorization?.institution_id as string
+    const institution_id = req.decoded_authorization?.institution_id as string | null
+    const user_role = req.decoded_authorization?.role as string
 
-    await this.postService.deleteComment(post_id, comment_id, user_id, institution_id)
+    await this.postService.deleteComment(post_id, comment_id, user_id, institution_id, user_role)
     res.status(HTTP_STATUS.OK).json({ message: 'Comment deleted successfully' })
   }
 

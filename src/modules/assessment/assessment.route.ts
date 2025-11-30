@@ -14,7 +14,7 @@ import {
   getAssessmentsQuerySchema,
   deleteAssessmentSchema
 } from './assessment.schema'
-import { validateRequest } from './assessment.middleware'
+import { validateRequest, healthSummaryAccessValidator } from './assessment.middleware'
 
 const assessmentRouter = Router()
 
@@ -63,6 +63,13 @@ assessmentRouter.get(
   getAssessmentsQuerySchema,
   validateRequest,
   wrapRequestHandler(assessmentController.getAssessmentsQuery)
+)
+
+assessmentRouter.get(
+  '/health-summary/:resident_id',
+  accessTokenValidator,
+  healthSummaryAccessValidator,
+  wrapRequestHandler(assessmentController.getHealthSummary)
 )
 
 // POST Routes - Tạo mới assessments

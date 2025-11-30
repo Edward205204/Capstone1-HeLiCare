@@ -31,6 +31,7 @@
     "@types/minimist": "^1.2.5",
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^7.0.2",
+    "@types/pdfkit": "^0.17.3",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
@@ -50,6 +51,7 @@
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "formidable": "^3.5.4",
@@ -58,6 +60,7 @@
     "minimist": "^1.2.8",
     "nanoid": "^5.1.6",
     "nodemailer": "^7.0.9",
+    "pdfkit": "^0.17.2",
     "sharp": "^0.34.4",
     "zx": "^8.8.5"
   }

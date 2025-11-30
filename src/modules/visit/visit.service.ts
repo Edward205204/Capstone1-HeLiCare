@@ -1,4 +1,4 @@
-import { VisitStatus } from '@prisma/client'
+import { VisitStatus, VisitTimeBlock, ActivityStatus } from '@prisma/client'
 import { prisma } from '~/utils/db'
 import { ErrorWithStatus } from '~/models/error'
 import { HTTP_STATUS } from '~/constants/http_status'
@@ -9,7 +9,7 @@ import { env } from '~/utils/dot.env'
 class VisitService {
   // Tạo lịch hẹn thăm viếng mới với logic cải tiến
   createVisit = async (family_user_id: string, visitData: CreateVisitReqBody) => {
-    const { resident_id, visit_date, visit_time, duration = 60, purpose, notes } = visitData
+    const { resident_id, visit_date, visit_time, time_block, duration = 60, purpose, notes } = visitData
 
     // Lấy thông tin resident và institution
     const resident = await prisma.resident.findUnique({
@@ -56,167 +56,385 @@ class VisitService {
     }
 
     const config = institution.visitConfiguration
-    const timeSlots = institution.visitTimeSlots
-
-    if (!config) {
-      throw new ErrorWithStatus({
-        message: 'Visit configuration not found for this institution',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    const visitDateTime = new Date(`${visit_date}T${visit_time}:00`)
     const today = new Date()
-    const maxAdvanceDays = config.advance_booking_days
-    const maxDate = new Date(today.getTime() + maxAdvanceDays * 24 * 60 * 60 * 1000)
+    today.setHours(0, 0, 0, 0)
+    const visitDate = new Date(visit_date)
+    visitDate.setHours(0, 0, 0, 0)
 
-    // Kiểm tra ngày đặt lịch có trong khoảng cho phép không
-    if (visitDateTime < today || visitDateTime > maxDate) {
+    // Kiểm tra ngày không được trong quá khứ
+    if (visitDate < today) {
       throw new ErrorWithStatus({
-        message: `Visit date must be between today and ${maxAdvanceDays} days from now`,
+        message: 'Visit date cannot be in the past',
         status: HTTP_STATUS.BAD_REQUEST
       })
     }
 
-    // Tìm time slot phù hợp
-    const selectedSlot = timeSlots.find((slot) => {
-      const slotStart = new Date(`${visit_date}T${slot.start_time}:00`)
-      const slotEnd = new Date(`${visit_date}T${slot.end_time}:00`)
-      return visitDateTime >= slotStart && visitDateTime < slotEnd
-    })
+    // Nếu có config, kiểm tra advance booking days
+    if (config) {
+      const maxAdvanceDays = config.advance_booking_days || 30 // Default 30 days
+      const maxDate = new Date(today.getTime() + maxAdvanceDays * 24 * 60 * 60 * 1000)
 
-    if (!selectedSlot) {
-      throw new ErrorWithStatus({
-        message: 'No valid time slot found for the selected time',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
+      if (visitDate > maxDate) {
+        throw new ErrorWithStatus({
+          message: `Visit date cannot be more than ${maxAdvanceDays} days in the future`,
+          status: HTTP_STATUS.BAD_REQUEST
+        })
+      }
     }
 
-    // Kiểm tra giới hạn theo ngày
-    const dailyStats = await this.getOrCreateDailyStats(resident.institution_id!, visit_date)
-    if (dailyStats.total_visitors >= config.max_visitors_per_day) {
-      throw new ErrorWithStatus({
-        message: 'Daily visitor limit reached',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
+    // Nếu có time_block, sử dụng time_block (new system)
+    if (time_block) {
+      // Kiểm tra time block đã qua nếu là ngày hôm nay
+      if (visitDate.getTime() === today.getTime()) {
+        const now = new Date()
+        const currentHour = now.getHours()
+        const currentMinute = now.getMinutes()
+        const currentTime = currentHour * 60 + currentMinute // Total minutes from midnight
 
-    // Kiểm tra giới hạn theo slot
-    const slotVisitors = await this.getSlotVisitorCount(resident.institution_id!, visit_date, selectedSlot.slot_id)
-    if (slotVisitors >= config.max_visitors_per_slot) {
-      throw new ErrorWithStatus({
-        message: 'Time slot is full',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Kiểm tra giới hạn theo resident trong slot
-    const residentSlotVisitors = await this.getResidentSlotVisitorCount(resident_id, visit_date, selectedSlot.slot_id)
-    if (residentSlotVisitors >= config.max_visitors_per_resident_per_slot) {
-      throw new ErrorWithStatus({
-        message: 'Maximum visitors for this resident in this time slot reached',
-        status: HTTP_STATUS.BAD_REQUEST
-      })
-    }
-
-    // Kiểm tra family đã có lịch hẹn trong cùng thời gian chưa
-    const existingVisit = await prisma.visit.findFirst({
-      where: {
-        family_user_id,
-        visit_date: visitDateTime,
-        visit_time,
-        status: {
-          in: [VisitStatus.pending, VisitStatus.approved, VisitStatus.scheduled]
+        // Define time block ranges (in minutes from midnight)
+        // Morning: 6:00 (360) - 12:00 (720)
+        // Afternoon: 12:00 (720) - 18:00 (1080)
+        // Evening: 18:00 (1080) - 22:00 (1320)
+        if (time_block === 'morning' && currentTime >= 720) {
+          throw new ErrorWithStatus({
+            message: 'Buổi sáng đã qua, không thể đặt lịch cho khung giờ này',
+            status: HTTP_STATUS.BAD_REQUEST
+          })
+        }
+        if (time_block === 'afternoon' && currentTime >= 1080) {
+          throw new ErrorWithStatus({
+            message: 'Buổi chiều đã qua, không thể đặt lịch cho khung giờ này',
+            status: HTTP_STATUS.BAD_REQUEST
+          })
+        }
+        if (time_block === 'evening' && currentTime >= 1320) {
+          throw new ErrorWithStatus({
+            message: 'Buổi tối đã qua, không thể đặt lịch cho khung giờ này',
+            status: HTTP_STATUS.BAD_REQUEST
+          })
         }
       }
-    })
 
-    if (existingVisit) {
+      // Kiểm tra family đã có lịch hẹn trong cùng thời gian chưa (luôn check, không phụ thuộc config)
+      // Normalize visitDate to start of day for accurate comparison
+      const visitDateStart = new Date(visitDate)
+      visitDateStart.setHours(0, 0, 0, 0)
+      const visitDateEnd = new Date(visitDateStart)
+      visitDateEnd.setHours(23, 59, 59, 999)
+
+      const existingVisit = await prisma.visit.findFirst({
+        where: {
+          family_user_id,
+          resident_id,
+          visit_date: {
+            gte: visitDateStart,
+            lte: visitDateEnd
+          },
+          time_block,
+          status: {
+            in: [VisitStatus.pending, VisitStatus.approved, VisitStatus.scheduled]
+          }
+        }
+      })
+
+      if (existingVisit) {
+        throw new ErrorWithStatus({
+          message: 'You already have a visit scheduled at this time block',
+          status: HTTP_STATUS.CONFLICT
+        })
+      }
+
+      // Kiểm tra xung đột với schedule của resident
+      // Time block ranges (in hours):
+      // Morning: 6:00 - 12:00
+      // Afternoon: 12:00 - 18:00
+      // Evening: 18:00 - 22:00
+      const timeBlockRanges: Record<string, { start: number; end: number }> = {
+        morning: { start: 6, end: 12 },
+        afternoon: { start: 12, end: 18 },
+        evening: { start: 18, end: 22 }
+      }
+
+      const timeBlockRange = timeBlockRanges[time_block]
+      if (timeBlockRange) {
+        const blockStart = new Date(visitDateStart)
+        blockStart.setHours(timeBlockRange.start, 0, 0, 0)
+        const blockEnd = new Date(visitDateStart)
+        blockEnd.setHours(timeBlockRange.end, 0, 0, 0)
+
+        // Check if resident has any schedule that overlaps with this time block
+        const conflictingSchedule = await prisma.schedule.findFirst({
+          where: {
+            resident_id: resident_id,
+            start_time: {
+              lt: blockEnd
+            },
+            end_time: {
+              gt: blockStart
+            },
+            status: {
+              in: [ActivityStatus.planned, ActivityStatus.participated] // Only check active schedules
+            }
+          }
+        })
+
+        if (conflictingSchedule) {
+          throw new ErrorWithStatus({
+            message: 'Resident has a scheduled activity at this time block. Please choose another time.',
+            status: HTTP_STATUS.CONFLICT
+          })
+        }
+      }
+
+      // Chỉ check max capacity nếu có config
+      if (config) {
+        // Kiểm tra giới hạn theo ngày
+        const dailyStats = await this.getOrCreateDailyStats(resident.institution_id!, visit_date)
+        if (dailyStats.total_visitors >= config.max_visitors_per_day) {
+          // Trả về suggestions khi full
+          const suggestions = await this.getAvailabilitySuggestions(
+            resident.institution_id!,
+            visit_date,
+            time_block,
+            config
+          )
+          throw new ErrorWithStatus({
+            message: 'Daily visitor limit reached',
+            status: HTTP_STATUS.BAD_REQUEST,
+            suggestions
+          })
+        }
+
+        // Kiểm tra giới hạn theo time block
+        const timeBlockVisitors = await this.getTimeBlockVisitorCount(resident.institution_id!, visit_date, time_block)
+        if (timeBlockVisitors >= config.max_visitors_per_time_block) {
+          // Trả về suggestions khi full
+          const suggestions = await this.getAvailabilitySuggestions(
+            resident.institution_id!,
+            visit_date,
+            time_block,
+            config
+          )
+          throw new ErrorWithStatus({
+            message: 'Time block is full',
+            status: HTTP_STATUS.BAD_REQUEST,
+            suggestions
+          })
+        }
+      }
+    } else if (visit_time) {
+      // Backward compatibility: sử dụng visit_time (old system)
+      const visitDateTime = new Date(`${visit_date}T${visit_time}:00`)
+      const timeSlots = institution.visitTimeSlots
+
+      // Tìm time slot phù hợp
+      const selectedSlot = timeSlots.find((slot) => {
+        const slotStart = new Date(`${visit_date}T${slot.start_time}:00`)
+        const slotEnd = new Date(`${visit_date}T${slot.end_time}:00`)
+        return visitDateTime >= slotStart && visitDateTime < slotEnd
+      })
+
+      if (!selectedSlot) {
+        throw new ErrorWithStatus({
+          message: 'No valid time slot found for the selected time',
+          status: HTTP_STATUS.BAD_REQUEST
+        })
+      }
+
+      // Kiểm tra family đã có lịch hẹn trong cùng thời gian chưa (luôn check, không phụ thuộc config)
+      const existingVisit = await prisma.visit.findFirst({
+        where: {
+          family_user_id,
+          resident_id,
+          visit_date: visitDateTime,
+          visit_time,
+          status: {
+            in: [VisitStatus.pending, VisitStatus.approved, VisitStatus.scheduled]
+          }
+        }
+      })
+
+      if (existingVisit) {
+        throw new ErrorWithStatus({
+          message: 'You already have a visit scheduled at this time',
+          status: HTTP_STATUS.CONFLICT
+        })
+      }
+
+      // Chỉ check max capacity nếu có config
+      if (config) {
+        // Kiểm tra giới hạn theo ngày
+        const dailyStats = await this.getOrCreateDailyStats(resident.institution_id!, visit_date)
+        if (dailyStats.total_visitors >= config.max_visitors_per_day) {
+          throw new ErrorWithStatus({
+            message: 'Daily visitor limit reached',
+            status: HTTP_STATUS.BAD_REQUEST
+          })
+        }
+
+        // Kiểm tra giới hạn theo slot
+        const slotVisitors = await this.getSlotVisitorCount(resident.institution_id!, visit_date, selectedSlot.slot_id)
+        if (slotVisitors >= config.max_visitors_per_slot) {
+          throw new ErrorWithStatus({
+            message: 'Time slot is full',
+            status: HTTP_STATUS.BAD_REQUEST
+          })
+        }
+
+        // Kiểm tra giới hạn theo resident trong slot
+        const residentSlotVisitors = await this.getResidentSlotVisitorCount(
+          resident_id,
+          visit_date,
+          selectedSlot.slot_id
+        )
+        if (residentSlotVisitors >= config.max_visitors_per_resident_per_slot) {
+          throw new ErrorWithStatus({
+            message: 'Maximum visitors for this resident in this time slot reached',
+            status: HTTP_STATUS.BAD_REQUEST
+          })
+        }
+      }
+    } else {
       throw new ErrorWithStatus({
-        message: 'You already have a visit scheduled at this time',
-        status: HTTP_STATUS.CONFLICT
+        message: 'Either time_block or visit_time must be provided',
+        status: HTTP_STATUS.BAD_REQUEST
       })
     }
 
-    // Tạo visit trước để có visit_id
-    const visit = await prisma.visit.create({
-      data: {
-        family_user_id,
+    // Sử dụng transaction để đảm bảo ACID
+    const visitDateObj = new Date(visit_date)
+    visitDateObj.setHours(0, 0, 0, 0)
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Xóa bất kỳ visit cancelled nào ở cùng thời điểm để tránh unique constraint violation
+      // Điều này cho phép user tạo lại lịch ở cùng thời điểm sau khi hủy
+      if (time_block) {
+        await tx.visit.deleteMany({
+          where: {
+            family_user_id,
+            resident_id,
+            visit_date: visitDateObj,
+            time_block,
+            status: VisitStatus.cancelled
+          }
+        })
+      } else if (visit_time) {
+        const visitDateTime = new Date(`${visit_date}T${visit_time}:00`)
+        await tx.visit.deleteMany({
+          where: {
+            family_user_id,
+            resident_id,
+            visit_date: visitDateTime,
+            visit_time,
+            status: VisitStatus.cancelled
+          }
+        })
+      }
+
+      // Tạo visit
+      const visit = await tx.visit.create({
+        data: {
+          family_user_id,
+          resident_id,
+          institution_id: resident.institution_id!,
+          visit_date: visitDateObj,
+          visit_time: visit_time || null,
+          time_block: time_block || null,
+          duration,
+          purpose,
+          notes,
+          status: VisitStatus.scheduled
+        },
+        include: {
+          family_user: {
+            select: {
+              user_id: true,
+              email: true,
+              familyProfile: {
+                select: {
+                  full_name: true,
+                  phone: true
+                }
+              }
+            }
+          },
+          resident: {
+            select: {
+              resident_id: true,
+              full_name: true,
+              room: {
+                select: {
+                  room_number: true
+                }
+              }
+            }
+          },
+          institution: {
+            select: {
+              name: true,
+              contact_info: true
+            }
+          }
+        }
+      })
+
+      // Tạo QR code data với visit_id
+      const qrCodeData = this.generateQRCodeData(
+        visit.visit_id,
         resident_id,
-        institution_id: resident.institution_id!,
-        visit_date: visitDateTime,
-        visit_time,
-        duration,
-        purpose,
-        notes,
-        status: VisitStatus.scheduled
-      },
-      include: {
-        family_user: {
-          select: {
-            user_id: true,
-            email: true,
-            familyProfile: {
-              select: {
-                full_name: true,
-                phone: true
-              }
+        family_user_id,
+        resident.institution_id!,
+        visitDateObj,
+        time_block || null
+      )
+      const qrExpiresAt = new Date(visitDateObj.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+
+      // Cập nhật visit với QR code data
+      const updatedVisit = await tx.visit.update({
+        where: { visit_id: visit.visit_id },
+        data: {
+          qr_code_data: qrCodeData,
+          qr_expires_at: qrExpiresAt
+        }
+      })
+
+      // Tạo VisitSlot nếu có visit_time (old system)
+      if (visit_time && !time_block) {
+        const timeSlots = institution.visitTimeSlots
+        const visitDateTime = new Date(`${visit_date}T${visit_time}:00`)
+        const selectedSlot = timeSlots.find((slot) => {
+          const slotStart = new Date(`${visit_date}T${slot.start_time}:00`)
+          const slotEnd = new Date(`${visit_date}T${slot.end_time}:00`)
+          return visitDateTime >= slotStart && visitDateTime < slotEnd
+        })
+
+        if (selectedSlot) {
+          await tx.visitSlot.create({
+            data: {
+              visit_id: visit.visit_id,
+              slot_id: selectedSlot.slot_id
             }
-          }
-        },
-        resident: {
-          select: {
-            resident_id: true,
-            full_name: true,
-            room: {
-              select: {
-                room_number: true
-              }
-            }
-          }
-        },
-        institution: {
-          select: {
-            name: true,
-            contact_info: true
+          })
+          // Cập nhật daily stats (chỉ nếu có config)
+          if (config) {
+            await this.updateDailyStatsInTransaction(tx, resident.institution_id!, visit_date, selectedSlot.slot_id)
           }
         }
+      } else if (time_block) {
+        // Cập nhật daily stats cho time block (chỉ nếu có config)
+        if (config) {
+          await this.updateDailyStatsForTimeBlockInTransaction(tx, resident.institution_id!, visit_date, time_block)
+        }
       }
-    })
 
-    // Tạo QR code data với visit_id
-    const qrCodeData = this.generateQRCodeData(visit.visit_id, resident_id, family_user_id, visitDateTime)
-    const qrExpiresAt = new Date(visitDateTime.getTime() + 24 * 60 * 60 * 1000) // 24 hours
-
-    // Cập nhật visit với QR code data
-    const updatedVisit = await prisma.visit.update({
-      where: { visit_id: visit.visit_id },
-      data: {
+      return {
+        ...updatedVisit,
         qr_code_data: qrCodeData,
-        qr_expires_at: qrExpiresAt
+        time_block: time_block || null
       }
     })
 
-    // Tạo VisitSlot
-    await prisma.visitSlot.create({
-      data: {
-        visit_id: visit.visit_id,
-        slot_id: selectedSlot.slot_id
-      }
-    })
-
-    // Cập nhật daily stats
-    await this.updateDailyStats(resident.institution_id!, visit_date, selectedSlot.slot_id)
-
-    return {
-      ...updatedVisit,
-      qr_code_data: qrCodeData,
-      time_slot: {
-        name: selectedSlot.name,
-        start_time: selectedSlot.start_time,
-        end_time: selectedSlot.end_time
-      }
-    }
+    return result
   }
 
   // Kiểm tra availability cho một ngày
@@ -224,53 +442,57 @@ class VisitService {
     const institution = await prisma.institution.findUnique({
       where: { institution_id },
       include: {
-        visitConfiguration: true,
-        visitTimeSlots: {
-          where: { is_active: true },
-          orderBy: { start_time: 'asc' }
-        }
+        visitConfiguration: true
       }
     })
 
-    if (!institution || !institution.visitConfiguration) {
+    if (!institution) {
       throw new ErrorWithStatus({
-        message: 'Institution or configuration not found',
+        message: 'Institution not found',
         status: HTTP_STATUS.NOT_FOUND
       })
     }
 
     const config = institution.visitConfiguration
-    const timeSlots = institution.visitTimeSlots
     const dailyStats = await this.getOrCreateDailyStats(institution_id, date)
 
-    const availability = timeSlots.map((slot) => {
-      const visitorsBySlot = (dailyStats.visitors_by_slot as Record<string, number>) || {}
-      const slotVisitors = visitorsBySlot[slot.slot_id] || 0
-      const isAvailable = slotVisitors < config.max_visitors_per_slot
+    // Kiểm tra availability cho từng time block
+    const timeBlocks: VisitTimeBlock[] = ['morning', 'afternoon', 'evening']
+    const availability = await Promise.all(
+      timeBlocks.map(async (timeBlock) => {
+        const timeBlockVisitors = await this.getTimeBlockVisitorCount(institution_id, date, timeBlock)
 
-      return {
-        slot_id: slot.slot_id,
-        name: slot.name,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        current_visitors: slotVisitors,
-        max_visitors: config.max_visitors_per_slot,
-        is_available: isAvailable
-      }
-    })
+        // Nếu không có config, luôn available (unlimited)
+        if (!config) {
+          return {
+            time_block: timeBlock,
+            current_visitors: timeBlockVisitors,
+            max_visitors: null, // Unlimited
+            is_available: true
+          }
+        }
+
+        const isAvailable = timeBlockVisitors < config.max_visitors_per_time_block
+        return {
+          time_block: timeBlock,
+          current_visitors: timeBlockVisitors,
+          max_visitors: config.max_visitors_per_time_block,
+          is_available: isAvailable
+        }
+      })
+    )
 
     return {
       date,
       total_visitors: dailyStats.total_visitors,
-      max_visitors_per_day: config.max_visitors_per_day,
-      is_day_available: dailyStats.total_visitors < config.max_visitors_per_day,
-      time_slots: availability
+      max_visitors_per_day: config?.max_visitors_per_day || null, // null means unlimited
+      is_day_available: config ? dailyStats.total_visitors < config.max_visitors_per_day : true,
+      time_blocks: availability
     }
   }
 
   // Check-in với QR code
   checkIn = async (qrCodeData: string, _staff_id: string) => {
-    // Giải mã QR code
     const decoded = this.decodeQRCodeData(qrCodeData)
     if (!decoded) {
       throw new ErrorWithStatus({
@@ -447,13 +669,25 @@ class VisitService {
   }
 
   // Helper methods
-  private generateQRCodeData(visit_id: string, resident_id: string, family_user_id: string, visit_date: Date): string {
-    const payload = {
+  private generateQRCodeData(
+    visit_id: string,
+    resident_id: string,
+    family_user_id: string,
+    institution_id: string,
+    visit_date: Date,
+    time_block: VisitTimeBlock | null
+  ): string {
+    const payload: any = {
       visit_id,
       resident_id,
       family_user_id,
+      institution_id,
       visit_date: visit_date.toISOString(),
       exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60 // 24 hours
+    }
+
+    if (time_block) {
+      payload.time_block = time_block
     }
 
     return jwt.sign(payload, env.JWT_SECRET_KEY_COMMON_TOKEN as string)
@@ -605,6 +839,55 @@ class VisitService {
     return { visits, total }
   }
 
+  // Get visits by resident_id (for Resident role)
+  getVisitsByResident = async (resident_id: string, status?: VisitStatus, limit = 100, offset = 0) => {
+    const where: any = {
+      resident_id
+    }
+
+    if (status) {
+      where.status = status
+    }
+
+    const visits = await prisma.visit.findMany({
+      where,
+      include: {
+        resident: {
+          select: {
+            resident_id: true,
+            full_name: true,
+            room: {
+              select: {
+                room_number: true
+              }
+            }
+          }
+        },
+        institution: {
+          select: {
+            name: true
+          }
+        },
+        family_user: {
+          select: {
+            familyProfile: {
+              select: {
+                full_name: true,
+                phone: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { visit_date: 'desc' },
+      take: limit,
+      skip: offset
+    })
+
+    const total = await prisma.visit.count({ where })
+    return { visits, total }
+  }
+
   getVisitsByDate = async (date: string, institution_id: string) => {
     const visitDate = new Date(date)
     const visits = await prisma.visit.findMany({
@@ -721,6 +1004,176 @@ class VisitService {
       completed,
       cancelled
     }
+  }
+
+  // Helper methods for time blocks
+  private async getTimeBlockVisitorCount(
+    institution_id: string,
+    date: string,
+    time_block: VisitTimeBlock
+  ): Promise<number> {
+    const visitDate = new Date(date)
+    visitDate.setHours(0, 0, 0, 0)
+    const nextDay = new Date(visitDate)
+    nextDay.setDate(nextDay.getDate() + 1)
+
+    const count = await prisma.visit.count({
+      where: {
+        institution_id,
+        visit_date: {
+          gte: visitDate,
+          lt: nextDay
+        },
+        time_block,
+        status: {
+          in: [VisitStatus.scheduled, VisitStatus.checked_in, VisitStatus.completed]
+        }
+      }
+    })
+
+    return count
+  }
+
+  private async updateDailyStatsForTimeBlock(institution_id: string, date: string, time_block: VisitTimeBlock) {
+    const visitDate = new Date(date)
+    visitDate.setHours(0, 0, 0, 0)
+    const stats = await this.getOrCreateDailyStats(institution_id, date)
+
+    await prisma.visitDailyStats.update({
+      where: {
+        institution_id_visit_date: {
+          institution_id,
+          visit_date: visitDate
+        }
+      },
+      data: {
+        total_visitors: stats.total_visitors + 1
+      }
+    })
+  }
+
+  // Transaction version of updateDailyStatsForTimeBlock
+  private async updateDailyStatsForTimeBlockInTransaction(
+    tx: any,
+    institution_id: string,
+    date: string,
+    time_block: VisitTimeBlock
+  ) {
+    const visitDate = new Date(date)
+    visitDate.setHours(0, 0, 0, 0)
+    const stats = await this.getOrCreateDailyStatsInTransaction(tx, institution_id, date)
+
+    await tx.visitDailyStats.update({
+      where: {
+        institution_id_visit_date: {
+          institution_id,
+          visit_date: visitDate
+        }
+      },
+      data: {
+        total_visitors: stats.total_visitors + 1
+      }
+    })
+  }
+
+  // Transaction version of updateDailyStats
+  private async updateDailyStatsInTransaction(tx: any, institution_id: string, date: string, slot_id: string) {
+    const visitDate = new Date(date)
+    const stats = await this.getOrCreateDailyStatsInTransaction(tx, institution_id, date)
+
+    const visitorsBySlot = { ...((stats.visitors_by_slot as Record<string, number>) || {}) }
+    visitorsBySlot[slot_id] = (visitorsBySlot[slot_id] || 0) + 1
+
+    await tx.visitDailyStats.update({
+      where: {
+        institution_id_visit_date: {
+          institution_id,
+          visit_date: visitDate
+        }
+      },
+      data: {
+        total_visitors: stats.total_visitors + 1,
+        visitors_by_slot: visitorsBySlot
+      }
+    })
+  }
+
+  // Transaction version of getOrCreateDailyStats
+  private async getOrCreateDailyStatsInTransaction(tx: any, institution_id: string, date: string) {
+    const visitDate = new Date(date)
+    let stats = await tx.visitDailyStats.findUnique({
+      where: {
+        institution_id_visit_date: {
+          institution_id,
+          visit_date: visitDate
+        }
+      }
+    })
+
+    if (!stats) {
+      stats = await tx.visitDailyStats.create({
+        data: {
+          institution_id,
+          visit_date: visitDate,
+          total_visitors: 0,
+          visitors_by_slot: {}
+        }
+      })
+    }
+
+    return stats
+  }
+
+  private async getAvailabilitySuggestions(
+    institution_id: string,
+    requestedDate: string,
+    requestedTimeBlock: VisitTimeBlock,
+    config: { max_visitors_per_time_block: number; advance_booking_days: number }
+  ) {
+    const suggestions: Array<{ date: string; time_block: VisitTimeBlock; available_slots: number }> = []
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const maxDate = new Date(today.getTime() + config.advance_booking_days * 24 * 60 * 60 * 1000)
+
+    // Kiểm tra các ngày trong tương lai (tối đa 7 ngày)
+    for (let i = 0; i < 7; i++) {
+      const checkDate = new Date(today)
+      checkDate.setDate(checkDate.getDate() + i)
+
+      if (checkDate > maxDate) break
+
+      const dateStr = checkDate.toISOString().split('T')[0]
+      const timeBlocks: VisitTimeBlock[] = ['morning', 'afternoon', 'evening']
+
+      for (const timeBlock of timeBlocks) {
+        // Bỏ qua time block đã được yêu cầu nếu cùng ngày
+        if (dateStr === requestedDate && timeBlock === requestedTimeBlock) {
+          continue
+        }
+
+        const timeBlockVisitors = await this.getTimeBlockVisitorCount(institution_id, dateStr, timeBlock)
+        const availableSlots = Math.max(0, config.max_visitors_per_time_block - timeBlockVisitors)
+
+        if (availableSlots > 0) {
+          suggestions.push({
+            date: dateStr,
+            time_block: timeBlock,
+            available_slots: availableSlots
+          })
+        }
+      }
+    }
+
+    // Sắp xếp theo ngày và time block
+    suggestions.sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date)
+      }
+      const order: Record<VisitTimeBlock, number> = { morning: 0, afternoon: 1, evening: 2 }
+      return order[a.time_block] - order[b.time_block]
+    })
+
+    return suggestions.slice(0, 10) // Trả về tối đa 10 suggestions
   }
 }
 

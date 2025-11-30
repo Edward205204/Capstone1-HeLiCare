@@ -10,6 +10,7 @@ import {
   residentIdSchema,
   visitDateSchema,
   visitTimeSchema,
+  visitTimeBlockSchema,
   durationSchema,
   purposeSchema,
   visitNotesSchema,
@@ -49,6 +50,20 @@ export const isHandleByAdminOrStaff = (req: Request, res: Response, next: NextFu
   next()
 }
 
+// Middleware kiểm tra ít nhất một trong visit_time hoặc time_block được cung cấp
+export const checkTimeOrTimeBlock = (req: Request, res: Response, next: NextFunction) => {
+  const { visit_time, time_block } = req.body
+  if (!visit_time && !time_block) {
+    return next(
+      new ErrorWithStatus({
+        message: 'Either visit_time or time_block must be provided',
+        status: HTTP_STATUS.UNPROCESSABLE_ENTITY
+      })
+    )
+  }
+  next()
+}
+
 // Validator cho tạo lịch hẹn thăm viếng
 export const createVisitValidator = validate(
   checkSchema(
@@ -80,6 +95,7 @@ export const createVisitValidator = validate(
       },
       visit_date: visitDateSchema,
       visit_time: visitTimeSchema,
+      time_block: visitTimeBlockSchema,
       duration: durationSchema,
       purpose: purposeSchema,
       notes: visitNotesSchema
@@ -94,6 +110,7 @@ export const updateVisitValidator = validate(
     makePatchSchema({
       visit_date: visitDateSchema,
       visit_time: visitTimeSchema,
+      time_block: visitTimeBlockSchema,
       duration: durationSchema,
       purpose: purposeSchema,
       notes: visitNotesSchema

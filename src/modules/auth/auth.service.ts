@@ -53,18 +53,21 @@ class AuthService {
     role,
     institution_id,
     user_id,
-    status
+    status,
+    resident_id
   }: {
     role: UserRole
     institution_id: string | null
     user_id: string
     status: UserStatus
+    resident_id?: string
   }) => {
     const [access_token, refresh_token] = await this.signAccessTokenAndRefreshToken({
       user_id,
       status,
       institution_id,
-      role
+      role,
+      resident_id
     })
 
     const { exp } = await this.decodeRefreshToken(refresh_token)
@@ -110,6 +113,20 @@ class AuthService {
             phone: true,
             position: true,
             hire_date: true
+          }
+        },
+        resident: {
+          select: {
+            resident_id: true,
+            full_name: true,
+            date_of_birth: true,
+            gender: true,
+            room: {
+              select: {
+                room_id: true,
+                room_number: true
+              }
+            }
           }
         }
       }
@@ -306,6 +323,41 @@ class AuthService {
     })
     await prisma.userToken.deleteMany({
       where: { user_id, token_type: { in: [TokenType.RefreshToken, TokenType.ForgotPasswordToken] } }
+    })
+  }
+
+  changePassword = async ({ user_id, current_password, new_password }: { user_id: string; current_password: string; new_password: string }) => {
+    const user = await prisma.user.findUnique({
+      where: { user_id }
+    })
+
+    if (!user) {
+      throw new ErrorWithStatus({
+        message: 'User not found',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
+
+    // Verify current password
+    const { verifyPassword } = await import('~/utils/hash')
+    const isValidPassword = await verifyPassword(current_password, user.password)
+
+    if (!isValidPassword) {
+      throw new ErrorWithStatus({
+        message: 'Current password is incorrect',
+        status: HTTP_STATUS.BAD_REQUEST
+      })
+    }
+
+    // Hash and update new password
+    const { password: hashedPassword } = await hashPassword(new_password)
+    // Update password and set status to active (đã đổi mật khẩu)
+    await prisma.user.update({
+      where: { user_id },
+      data: { 
+        password: hashedPassword,
+        status: UserStatus.active // Khi resident đổi mật khẩu thì set status = active
+      }
     })
   }
 

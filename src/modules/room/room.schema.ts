@@ -33,7 +33,7 @@ export const roomCapacitySchema = {
   isInt: {
     options: {
       min: 1,
-      max: 10
+      max: 50
     },
     errorMessage: 'Room capacity must be between 1 and 10'
   }

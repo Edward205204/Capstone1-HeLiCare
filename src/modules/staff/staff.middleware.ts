@@ -49,7 +49,8 @@ export const createStaffForInstitutionValidator = validate(
           options: async (value, { req }) => {
             if (
               req.decoded_authorization?.role !== UserRole.Admin &&
-              req.decoded_authorization?.role !== UserRole.RootAdmin
+              req.decoded_authorization?.role !== UserRole.RootAdmin &&
+              req.decoded_authorization?.role !== UserRole.Staff
             ) {
               throw new ErrorWithStatus({
                 message: 'You are not authorized to create staff for institution',

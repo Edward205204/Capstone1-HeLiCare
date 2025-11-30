@@ -4,6 +4,7 @@ import { HTTP_STATUS } from '~/constants/http_status'
 import { AuthService, authService as authServiceInstance } from './auth.service'
 import { User, UserStatus } from '@prisma/client'
 import { EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
+import { prisma } from '~/utils/db'
 
 class AuthController {
   constructor(
@@ -18,6 +19,36 @@ class AuthController {
       institution_id: user.institution_id,
       user_id: user.user_id,
       status: user.status
+    })
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Login successfully',
+      data
+    })
+  }
+
+  residentLogin = async (req: Request, res: Response) => {
+    const user = req.user as User & { resident?: { resident_id: string; institution_id: string } }
+    
+    // Get resident_id from the user's resident relation
+    const resident = await prisma.resident.findUnique({
+      where: { user_id: user.user_id },
+      select: { resident_id: true, institution_id: true }
+    })
+
+    if (!resident) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({
+        message: 'Resident profile not found for this user'
+      })
+      return
+    }
+
+    const data = await this.authService.login({
+      role: user.role,
+      institution_id: resident.institution_id,
+      user_id: user.user_id,
+      status: user.status,
+      resident_id: resident.resident_id
     })
 
     res.status(HTTP_STATUS.OK).json({
@@ -79,6 +110,19 @@ class AuthController {
     })
     res.status(HTTP_STATUS.OK).json({
       message: 'Reset password successfully'
+    })
+  }
+
+  changePassword = async (req: Request, res: Response) => {
+    const user = req.user as User
+    const { current_password, new_password } = req.body
+    await this.authService.changePassword({
+      user_id: user.user_id,
+      current_password,
+      new_password
+    })
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Password changed successfully'
     })
   }
 

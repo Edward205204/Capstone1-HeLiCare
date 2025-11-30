@@ -1,7 +1,7 @@
-import { PrismaClient, CareLog, CareLogType, CareTaskStatus } from '@prisma/client'
+import { CareLog, CareLogType, CareTaskStatus, CorrectionSourceType } from '@prisma/client'
 import { CreateCareLogDto, UpdateCareLogDto, GetCareLogsQueryParams, CareLogResponse } from './carelog.dto'
-
-const prisma = new PrismaClient()
+import { prisma } from '~/utils/db'
+import { correctionLogService } from '~/common/correction-log.service'
 
 export class CareLogService {
   async createCareLog(staff_id: string, institution_id: string, data: CreateCareLogDto): Promise<CareLog> {
@@ -173,8 +173,20 @@ export class CareLogService {
     })
   }
 
-  async updateCareLog(care_log_id: string, data: UpdateCareLogDto): Promise<CareLog> {
-    return await prisma.careLog.update({
+  async updateCareLog(
+    care_log_id: string,
+    data: UpdateCareLogDto,
+    options?: { corrected_by_id?: string; correction_reason?: string }
+  ): Promise<CareLog> {
+    const original = await prisma.careLog.findUnique({
+      where: { care_log_id }
+    })
+
+    if (!original) {
+      throw new Error('Care log not found')
+    }
+
+    const updatedCareLog = await prisma.careLog.update({
       where: { care_log_id },
       data,
       include: {
@@ -210,6 +222,37 @@ export class CareLogService {
         }
       }
     })
+
+    if (options?.corrected_by_id) {
+      await correctionLogService.recordFieldCorrections({
+        source_type: CorrectionSourceType.CareLog,
+        source_id: care_log_id,
+        corrected_by_id: options.corrected_by_id,
+        reason: options.correction_reason,
+        before: original,
+        after: updatedCareLog,
+        fields: [
+          'title',
+          'description',
+          'start_time',
+          'end_time',
+          'status',
+          'medication_name',
+          'dosage',
+          'medication_status',
+          'meal_type',
+          'food_items',
+          'quantity',
+          'exercise_type',
+          'duration_minutes',
+          'intensity',
+          'notes',
+          'type'
+        ]
+      })
+    }
+
+    return updatedCareLog
   }
 
   async deleteCareLog(care_log_id: string): Promise<CareLog> {
@@ -268,6 +311,67 @@ export class CareLogService {
     return { data, total }
   }
 
+  async getMealCareLogsByResident(
+    resident_id: string,
+    params: {
+      take?: number
+      skip?: number
+      start_date?: string
+      end_date?: string
+    } = {}
+  ): Promise<{ data: CareLogResponse[]; total: number }> {
+    const { take = 50, skip = 0, start_date, end_date } = params
+
+    const where: any = {
+      resident_id,
+      type: CareLogType.meal
+    }
+
+    if (start_date || end_date) {
+      where.start_time = {}
+      if (start_date) {
+        where.start_time.gte = new Date(start_date)
+      }
+      if (end_date) {
+        const endDate = new Date(end_date)
+        endDate.setHours(23, 59, 59, 999)
+        where.start_time.lte = endDate
+      }
+    }
+
+    const [data, total] = await Promise.all([
+      prisma.careLog.findMany({
+        where,
+        take,
+        skip,
+        orderBy: { start_time: 'desc' },
+        select: {
+          care_log_id: true,
+          resident_id: true,
+          staff_id: true,
+          activity_id: true,
+          schedule_id: true,
+          institution_id: true,
+          type: true,
+          title: true,
+          description: true,
+          start_time: true,
+          end_time: true,
+          status: true,
+          meal_type: true,
+          food_items: true,
+          quantity: true,
+          notes: true,
+          created_at: true,
+          updated_at: true
+        }
+      }),
+      prisma.careLog.count({ where })
+    ])
+
+    return { data, total }
+  }
+
   async getCareLogsByStaff(staff_id: string, take = 10, skip = 0): Promise<{ data: CareLogResponse[]; total: number }> {
     const [data, total] = await Promise.all([
       prisma.careLog.findMany({
@@ -314,43 +418,12 @@ export class CareLogService {
     return { data, total }
   }
 
-  async updateCareLogStatus(care_log_id: string, status: CareTaskStatus): Promise<CareLog> {
-    return await prisma.careLog.update({
-      where: { care_log_id },
-      data: { status },
-      include: {
-        resident: {
-          select: {
-            resident_id: true,
-            full_name: true
-          }
-        },
-        staff: {
-          select: {
-            user_id: true,
-            staffProfile: {
-              select: {
-                full_name: true,
-                position: true
-              }
-            }
-          }
-        },
-        activity: {
-          select: {
-            activity_id: true,
-            name: true,
-            type: true
-          }
-        },
-        schedule: {
-          select: {
-            schedule_id: true,
-            title: true
-          }
-        }
-      }
-    })
+  async updateCareLogStatus(
+    care_log_id: string,
+    status: CareTaskStatus,
+    options?: { corrected_by_id?: string; correction_reason?: string }
+  ): Promise<CareLog> {
+    return await this.updateCareLog(care_log_id, { status }, options)
   }
 
   async getCareLogStatistics(institution_id: string): Promise<{

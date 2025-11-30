@@ -70,25 +70,25 @@ export interface CareLogResponse {
   care_log_id: string
   resident_id: string
   staff_id: string
-  activity_id?: string
-  schedule_id?: string
+  activity_id?: string | null
+  schedule_id?: string | null
   institution_id: string
   type: CareLogType
   title: string
-  description?: string
+  description?: string | null
   start_time: Date
-  end_time?: Date
+  end_time?: Date | null
   status: CareTaskStatus
-  medication_name?: string
-  dosage?: string
-  medication_status?: MedicationStatus
-  meal_type?: string
-  food_items?: string
-  quantity?: string
-  exercise_type?: string
-  duration_minutes?: number
-  intensity?: string
-  notes?: string
+  medication_name?: string | null
+  dosage?: string | null
+  medication_status?: MedicationStatus | null
+  meal_type?: string | null
+  food_items?: string | null
+  quantity?: string | null
+  exercise_type?: string | null
+  duration_minutes?: number | null
+  intensity?: string | null
+  notes?: string | null
   created_at: Date
   updated_at: Date
   resident?: {
@@ -100,15 +100,15 @@ export interface CareLogResponse {
     staffProfile?: {
       full_name: string
       position: string
-    }
+    } | null
   }
   activity?: {
     activity_id: string
     name: string
     type: string
-  }
+  } | null
   schedule?: {
     schedule_id: string
     title: string
-  }
+  } | null
 }
