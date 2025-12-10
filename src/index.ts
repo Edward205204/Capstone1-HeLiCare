@@ -47,17 +47,7 @@ app.use('/api/media', mediaRouter)
 app.use('/api/staff', staffRouter)
 app.use('/api/feedbacks', feedbackRouter)
 app.use('/api/notifications', notificationCenterRouter)
-app.use(
-  '/api/menu-planner',
-  (req, res, next) => {
-    console.log('=== MENU PLANNER ROUTER ===')
-    console.log('Request URL:', req.url)
-    console.log('Request method:', req.method)
-    console.log('Request path:', req.path)
-    next()
-  },
-  menuPlannerRouter
-)
+app.use('/api/menu-planner', menuPlannerRouter)
 app.use('/api/medication-careplan', medicationCarePlanRouter)
 app.use('/api/events', eventRouter)
 app.use(defaultErrorHandler)

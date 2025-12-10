@@ -273,6 +273,7 @@ model Institution {
   medications          Medication[]
   medicationCarePlans  MedicationCarePlanAssignment[]
   events               Event[]
+  serviceContracts ServiceContract[]
 }
 
 model User {
@@ -307,6 +308,7 @@ model User {
   createdMenus        WeeklyMenu[]           @relation("MenuCreator")
   familyNotificationState FamilyNotificationState?
   familyNotificationReads FamilyNotificationRead[]
+  paymentsMade     Payment[]
 }
 
 model StaffProfile {
@@ -385,6 +387,7 @@ model Resident {
   postResidents       PostResident[]       @relation("PostResidents")
   dietTags            ResidentDietTag[]
   feedbacks           Feedback[]
+  serviceContract  ServiceContract?
 }
 
 model HealthAssessment {
@@ -1108,4 +1111,73 @@ model Event {
   @@index([institution_id, start_time])
   @@index([status])
   @@index([type])
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentMethod {
+  CASH        
+  TRANSFER    
+}
+
+enum PaymentStatus {
+  PENDING   
+  SUCCESS   
+  FAILED    
+  REFUNDED 
+}
+
+model ServiceContract {
+  contract_id    String       @id @default(uuid())
+  resident_id    String       @unique // Mỗi cụ chỉ có 1 hợp đồng active tại 1 thời điểm
+  institution_id String
+  
+  billing_cycle  BillingCycle @default(MONTHLY) // Trả theo Tháng hay Năm
+  amount         Float        // Giá tiền của gói này
+  
+  start_date     DateTime     @default(now())
+  
+  // Quan trọng: Ngày cần thanh toán tiếp theo. 
+  // Ví dụ: Đã trả tháng 10, next_billing_date sẽ là 01/11.
+  // Logic Frontend: Nếu today >= next_billing_date => Hiện nút "Thanh toán ngay"
+  next_billing_date DateTime 
+  
+  is_active      Boolean      @default(true)
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+
+  resident       Resident     @relation(fields: [resident_id], references: [resident_id])
+  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
+  payments       Payment[]    // Lịch sử các lần gia hạn hợp đồng này
+
+  @@index([institution_id])
+}
+
+model Payment {
+  payment_id      String        @id @default(uuid())
+  contract_id     String       
+  payer_id        String?      
+  
+  amount          Float
+  payment_method  PaymentMethod @default(TRANSFER)
+  status          PaymentStatus @default(PENDING)
+  
+
+  transaction_ref String?       
+  
+
+  period_start    DateTime     
+  period_end      DateTime     
+  
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+
+  contract        ServiceContract @relation(fields: [contract_id], references: [contract_id])
+  payer           User?           @relation(fields: [payer_id], references: [user_id])
+
+  @@index([contract_id])
+  @@index([transaction_ref])
 }
