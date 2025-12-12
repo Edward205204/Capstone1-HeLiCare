@@ -40,7 +40,7 @@ class ServiceContractController {
   getServiceContracts = async (req: Request, res: Response) => {
     try {
       const institution_id = req.decoded_authorization?.institution_id as string
-      const query = req.query as unknown as GetServiceContractsQuery
+      const query = req.query as any
 
       if (!institution_id) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -49,9 +49,18 @@ class ServiceContractController {
         return
       }
 
+      // Convert query params to proper types
       const params: GetServiceContractsQuery = {
-        ...query,
-        institution_id
+        institution_id,
+        resident_id: query.resident_id as string | undefined,
+        page: query.page ? Number(query.page) : undefined,
+        limit: query.limit ? Number(query.limit) : undefined,
+        is_active:
+          query.is_active !== undefined
+            ? typeof query.is_active === 'string'
+              ? query.is_active === 'true'
+              : Boolean(query.is_active)
+            : undefined
       }
 
       const result = await serviceContractService.getServiceContracts(params)

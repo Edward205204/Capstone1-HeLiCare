@@ -104,8 +104,8 @@ export const institutionIdSchema: ParamSchema = {
   notEmpty: {
     errorMessage: 'Institution ID is required'
   },
-  isUUID: {
-    errorMessage: 'Institution ID must be a valid UUID'
+  isString: {
+    errorMessage: 'Institution ID must be a string'
   },
   trim: true
 }
@@ -131,8 +131,8 @@ export const businessIdSchema: ParamSchema = {
 }
 
 export const residentIdSchema: ParamSchema = {
-  isUUID: {
-    errorMessage: 'Resident ID is invalid'
+  isString: {
+    errorMessage: 'Resident ID must be a string'
   },
   custom: {
     options: async (value, { req }) => {

@@ -4,9 +4,6 @@ export const residentIdSchema = {
   },
   isString: {
     errorMessage: 'Resident ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Resident ID must be a valid UUID'
   }
 }
 
@@ -19,7 +16,7 @@ export const visitDateSchema = {
       // Accept both "YYYY-MM-DD" and full ISO8601 format
       const simpleDateRegex = /^\d{4}-\d{2}-\d{2}$/
       const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$/
-      
+
       if (!simpleDateRegex.test(value) && !isoDateRegex.test(value)) {
         throw new Error('Visit date must be a valid date string (YYYY-MM-DD or ISO8601)')
       }
@@ -122,9 +119,6 @@ export const visitIdSchema = {
   },
   isString: {
     errorMessage: 'Visit ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Visit ID must be a valid UUID'
   }
 }
 
@@ -151,8 +145,5 @@ export const institutionIdQuerySchema = {
   optional: true,
   isString: {
     errorMessage: 'Institution ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Institution ID must be a valid UUID'
   }
 }

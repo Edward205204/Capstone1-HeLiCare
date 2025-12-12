@@ -24,7 +24,7 @@ export const createActivitySchema = [
 ]
 
 export const updateActivitySchema = [
-  param('activity_id').isUUID().withMessage('Invalid activity ID'),
+  param('activity_id').isString().withMessage('Invalid activity ID'),
 
   body('name')
     .optional()
@@ -48,7 +48,7 @@ export const updateActivitySchema = [
   body('is_active').optional().isBoolean().withMessage('is_active must be a boolean')
 ]
 
-export const getActivityByIdSchema = [param('activity_id').isUUID().withMessage('Invalid activity ID')]
+export const getActivityByIdSchema = [param('activity_id').isString().withMessage('Invalid activity ID')]
 
 export const getActivitiesSchema = [
   query('take').optional().isInt({ min: 1, max: 100 }).withMessage('Take must be between 1 and 100'),

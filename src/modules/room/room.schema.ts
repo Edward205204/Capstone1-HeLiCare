@@ -58,9 +58,6 @@ export const residentIdSchema = {
   },
   isString: {
     errorMessage: 'Resident ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Resident ID must be a valid UUID'
   }
 }
 
@@ -70,8 +67,5 @@ export const roomIdSchema = {
   },
   isString: {
     errorMessage: 'Room ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Room ID must be a valid UUID'
   }
 }

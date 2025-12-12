@@ -6,9 +6,6 @@ export const contractIdSchema = {
   },
   isString: {
     errorMessage: 'Contract ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Contract ID must be a valid UUID'
   }
 }
 
@@ -68,9 +65,6 @@ export const paymentIdSchema = {
   },
   isString: {
     errorMessage: 'Payment ID must be a string'
-  },
-  isUUID: {
-    errorMessage: 'Payment ID must be a valid UUID'
   }
 }
 

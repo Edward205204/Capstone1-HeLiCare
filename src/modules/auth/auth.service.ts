@@ -292,7 +292,8 @@ class AuthService {
   }
 
   logout = async (token_string: string) => {
-    await prisma.userToken.delete({
+    // Use deleteMany to avoid error if token doesn't exist (already deleted or expired)
+    await prisma.userToken.deleteMany({
       where: { token_string }
     })
   }
@@ -326,7 +327,15 @@ class AuthService {
     })
   }
 
-  changePassword = async ({ user_id, current_password, new_password }: { user_id: string; current_password: string; new_password: string }) => {
+  changePassword = async ({
+    user_id,
+    current_password,
+    new_password
+  }: {
+    user_id: string
+    current_password: string
+    new_password: string
+  }) => {
     const user = await prisma.user.findUnique({
       where: { user_id }
     })
@@ -354,7 +363,7 @@ class AuthService {
     // Update password and set status to active (đã đổi mật khẩu)
     await prisma.user.update({
       where: { user_id },
-      data: { 
+      data: {
         password: hashedPassword,
         status: UserStatus.active // Khi resident đổi mật khẩu thì set status = active
       }
@@ -381,19 +390,20 @@ class AuthService {
       throw new Error('Exp is not found')
     }
 
-    await Promise.all([
-      prisma.userToken.delete({
-        where: { token_string }
-      }),
-      prisma.userToken.create({
-        data: {
-          user_id: user.user_id,
-          token_string: refresh_token,
-          token_type: TokenType.RefreshToken,
-          exp: exp
-        }
-      })
-    ])
+    // Delete old token if exists (use deleteMany to avoid error if token doesn't exist)
+    await prisma.userToken.deleteMany({
+      where: { token_string }
+    })
+
+    // Create new refresh token
+    await prisma.userToken.create({
+      data: {
+        user_id: user.user_id,
+        token_string: refresh_token,
+        token_type: TokenType.RefreshToken,
+        exp: exp
+      }
+    })
 
     return {
       access_token,
@@ -456,8 +466,8 @@ class AuthService {
       data: { status: FamilyLinkStatus.active }
     })
 
-    // Xoá token sau khi dùng
-    await prisma.userToken.delete({ where: { token_string } })
+    // Xoá token sau khi dùng (use deleteMany to avoid error if token doesn't exist)
+    await prisma.userToken.deleteMany({ where: { token_string } })
   }
 
   resendFamilyLink = async (family_user_id: string) => {

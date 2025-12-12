@@ -147,8 +147,8 @@ export const createMedicationCarePlanSchema = validate(
         notEmpty: {
           errorMessage: 'Medication ID is required'
         },
-        isUUID: {
-          errorMessage: 'Medication ID must be a valid UUID'
+        isString: {
+          errorMessage: 'Medication ID must be a string'
         }
       },
       resident_ids: {
@@ -159,8 +159,8 @@ export const createMedicationCarePlanSchema = validate(
       },
       'resident_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each resident_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each resident_id must be a string'
         }
       },
       room_ids: {
@@ -171,8 +171,8 @@ export const createMedicationCarePlanSchema = validate(
       },
       'room_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each room_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each room_id must be a string'
         }
       },
       staff_ids: {
@@ -183,8 +183,8 @@ export const createMedicationCarePlanSchema = validate(
       },
       'staff_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each staff_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each staff_id must be a string'
         }
       },
       start_date: {
@@ -235,8 +235,8 @@ export const updateMedicationCarePlanSchema = validate(
       },
       'resident_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each resident_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each resident_id must be a string'
         }
       },
       room_ids: {
@@ -247,8 +247,8 @@ export const updateMedicationCarePlanSchema = validate(
       },
       'room_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each room_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each room_id must be a string'
         }
       },
       staff_ids: {
@@ -259,8 +259,8 @@ export const updateMedicationCarePlanSchema = validate(
       },
       'staff_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each staff_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each staff_id must be a string'
         }
       },
       start_date: {
@@ -358,26 +358,26 @@ export const getCarePlansSchema = validate(
       },
       medication_id: {
         optional: true,
-        isUUID: {
-          errorMessage: 'medication_id must be a valid UUID'
+        isString: {
+          errorMessage: 'medication_id must be a string'
         }
       },
       resident_id: {
         optional: true,
-        isUUID: {
-          errorMessage: 'resident_id must be a valid UUID'
+        isString: {
+          errorMessage: 'resident_id must be a string'
         }
       },
       room_id: {
         optional: true,
-        isUUID: {
-          errorMessage: 'room_id must be a valid UUID'
+        isString: {
+          errorMessage: 'room_id must be a string'
         }
       },
       staff_id: {
         optional: true,
-        isUUID: {
-          errorMessage: 'staff_id must be a valid UUID'
+        isString: {
+          errorMessage: 'staff_id must be a string'
         }
       },
       is_active: {
@@ -398,8 +398,8 @@ export const getAlertsSchema = validate(
         notEmpty: {
           errorMessage: 'Medication ID is required'
         },
-        isUUID: {
-          errorMessage: 'Medication ID must be a valid UUID'
+        isString: {
+          errorMessage: 'Medication ID must be a string'
         }
       },
       resident_ids: {
@@ -410,8 +410,8 @@ export const getAlertsSchema = validate(
       },
       'resident_ids.*': {
         optional: true,
-        isUUID: {
-          errorMessage: 'Each resident_id must be a valid UUID'
+        isString: {
+          errorMessage: 'Each resident_id must be a string'
         }
       }
     },

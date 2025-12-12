@@ -89,9 +89,6 @@ export const institutionIdValidator = validate(
         isString: {
           errorMessage: 'Institution ID must be a string'
         },
-        isUUID: {
-          errorMessage: 'Institution ID must be a valid UUID'
-        },
         custom: {
           options: async (value) => {
             const institution = await commonService.getInstitutionById(value)

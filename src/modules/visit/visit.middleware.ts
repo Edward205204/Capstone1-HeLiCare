@@ -218,8 +218,8 @@ export const checkAvailabilityValidator = validate(
         notEmpty: {
           errorMessage: 'Institution ID is required'
         },
-        isUUID: {
-          errorMessage: 'Institution ID must be a valid UUID'
+        isString: {
+          errorMessage: 'Institution ID must be a string'
         }
       },
       date: {
@@ -260,8 +260,8 @@ export const checkOutValidator = validate(
         notEmpty: {
           errorMessage: 'Visit ID is required'
         },
-        isUUID: {
-          errorMessage: 'Visit ID must be a valid UUID'
+        isString: {
+          errorMessage: 'Visit ID must be a string'
         }
       }
     },
@@ -277,8 +277,8 @@ export const cancelVisitValidator = validate(
         notEmpty: {
           errorMessage: 'Visit ID is required'
         },
-        isUUID: {
-          errorMessage: 'Visit ID must be a valid UUID'
+        isString: {
+          errorMessage: 'Visit ID must be a string'
         }
       },
       reason: {

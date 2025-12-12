@@ -9,8 +9,8 @@ export const residentIdSchema = {
   notEmpty: {
     errorMessage: 'Resident id is required'
   },
-  isUUID: {
-    errorMessage: 'Resident id must be a valid UUID'
+  isString: {
+    errorMessage: 'Resident id must be a string'
   },
   custom: {
     options: async (value: string, { req }: any) => {

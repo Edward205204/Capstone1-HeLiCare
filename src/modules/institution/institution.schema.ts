@@ -87,8 +87,8 @@ export const institutionIdSchema: ParamSchema = {
   notEmpty: {
     errorMessage: 'Institution ID is required'
   },
-  isUUID: {
-    errorMessage: 'Institution ID must be a valid UUID'
+  isString: {
+    errorMessage: 'Institution ID must be a string'
   },
   trim: true
 }

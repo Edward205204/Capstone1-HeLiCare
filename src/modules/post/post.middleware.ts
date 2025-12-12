@@ -9,8 +9,8 @@ export const postIdSchema = {
   notEmpty: {
     errorMessage: 'Post id is required'
   },
-  isUUID: {
-    errorMessage: 'Post id must be a valid UUID'
+  isString: {
+    errorMessage: 'Post id must be a string'
   },
   custom: {
     options: async (value: string, { req }: any) => {
@@ -92,8 +92,8 @@ export const commentIdSchema = {
   notEmpty: {
     errorMessage: 'Comment id is required'
   },
-  isUUID: {
-    errorMessage: 'Comment id must be a valid UUID'
+  isString: {
+    errorMessage: 'Comment id must be a string'
   },
   trim: true
 }

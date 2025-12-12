@@ -18,7 +18,7 @@ export const createDishSchema = [
 ]
 
 export const updateDishSchema = [
-  param('dish_id').isUUID().withMessage('Dish ID must be a valid UUID'),
+  param('dish_id').isString().withMessage('Dish ID must be a string'),
   body('name').optional().isString().notEmpty().withMessage('Dish name must be a non-empty string'),
   body('calories_per_100g').optional().isFloat({ min: 0 }).withMessage('Calories must be a positive number'),
   body('texture')
@@ -31,16 +31,16 @@ export const updateDishSchema = [
   body('dietary_flags.*').optional().isString().withMessage('Each dietary flag must be a string'),
   body('is_blendable').optional().isBoolean().withMessage('is_blendable must be a boolean'),
   body('ingredients').optional().isArray().withMessage('ingredients must be an array'),
-  body('ingredients.*.ingredient_id').optional().isUUID().withMessage('Each ingredient_id must be a valid UUID'),
+  body('ingredients.*.ingredient_id').optional().isString().withMessage('Each ingredient_id must be a string'),
   body('ingredients.*.amount')
     .optional()
     .isFloat({ min: 0 })
     .withMessage('Each ingredient amount must be a positive number')
 ]
 
-export const getDishByIdSchema = [param('dish_id').isUUID().withMessage('Dish ID must be a valid UUID')]
+export const getDishByIdSchema = [param('dish_id').isString().withMessage('Dish ID must be a string')]
 
-export const deleteDishSchema = [param('dish_id').isUUID().withMessage('Dish ID must be a valid UUID')]
+export const deleteDishSchema = [param('dish_id').isString().withMessage('Dish ID must be a string')]
 
 export const createIngredientSchema = [
   body('name').isString().notEmpty().withMessage('Ingredient name is required'),
@@ -54,7 +54,7 @@ export const createIngredientSchema = [
 ]
 
 export const updateIngredientSchema = [
-  param('ingredient_id').isUUID().withMessage('Ingredient ID must be a valid UUID'),
+  param('ingredient_id').isString().withMessage('Ingredient ID must be a string'),
   body('name').optional().isString().notEmpty().withMessage('Ingredient name must be a non-empty string'),
   body('unit').optional().isIn(['g', 'ml', 'pcs']).withMessage('Unit must be g, ml, or pcs'),
   body('calories_per_100g').optional().isFloat({ min: 0 }).withMessage('Calories must be a positive number'),
@@ -65,13 +65,9 @@ export const updateIngredientSchema = [
   body('sodium_per_100g').optional().isFloat({ min: 0 }).withMessage('Sodium must be a positive number')
 ]
 
-export const getIngredientByIdSchema = [
-  param('ingredient_id').isUUID().withMessage('Ingredient ID must be a valid UUID')
-]
+export const getIngredientByIdSchema = [param('ingredient_id').isString().withMessage('Ingredient ID must be a string')]
 
-export const deleteIngredientSchema = [
-  param('ingredient_id').isUUID().withMessage('Ingredient ID must be a valid UUID')
-]
+export const deleteIngredientSchema = [param('ingredient_id').isString().withMessage('Ingredient ID must be a string')]
 
 export const createWeeklyMenuSchema = [
   body('week_start_date').isISO8601().withMessage('week_start_date must be a valid ISO 8601 date'),
@@ -99,7 +95,7 @@ export const copyWeekMenuSchema = [
   body('adjust_servings').optional().isBoolean().withMessage('adjust_servings must be a boolean')
 ]
 
-export const getWeeklyMenuSchema = [param('menu_id').isUUID().withMessage('Menu ID must be a valid UUID')]
+export const getWeeklyMenuSchema = [param('menu_id').isString().withMessage('Menu ID must be a string')]
 
 export const getWeeklyMenuByWeekSchema = [
   param('week_start_date').isISO8601().withMessage('week_start_date must be a valid ISO 8601 date')
@@ -115,7 +111,7 @@ export const deleteWeeklyMenuSchema = [
 ]
 
 export const getDishSuggestionsSchema = [
-  param('resident_id').isUUID().withMessage('Resident ID must be a valid UUID'),
+  param('resident_id').isString().withMessage('Resident ID must be a string'),
   query('meal_slot')
     .optional()
     .isIn(['Breakfast', 'Lunch', 'Afternoon', 'Dinner'])
@@ -124,19 +120,19 @@ export const getDishSuggestionsSchema = [
 ]
 
 export const generateDishVariantSchema = [
-  param('dish_id').isUUID().withMessage('Dish ID must be a valid UUID'),
+  param('dish_id').isString().withMessage('Dish ID must be a string'),
   body('target_texture')
     .isIn(['Regular', 'Minced', 'Pureed'])
     .withMessage('target_texture must be Regular, Minced, or Pureed')
 ]
 
 export const checkResidentGroupVariantsSchema = [
-  param('dish_id').isUUID().withMessage('Dish ID must be a valid UUID'),
+  param('dish_id').isString().withMessage('Dish ID must be a string'),
   body('resident_ids').isArray().withMessage('resident_ids must be an array'),
-  body('resident_ids.*').isUUID().withMessage('Each resident_id must be a valid UUID')
+  body('resident_ids.*').isString().withMessage('Each resident_id must be a string')
 ]
 
-export const validateMenuNutritionSchema = [param('menu_id').isUUID().withMessage('Menu ID must be a valid UUID')]
+export const validateMenuNutritionSchema = [param('menu_id').isString().withMessage('Menu ID must be a string')]
 
 export const calculateDishNutritionSchema = [
   param('dish_id').isString().notEmpty().withMessage('Dish ID must be a non-empty string'),

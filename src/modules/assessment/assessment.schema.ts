@@ -2,7 +2,7 @@ import { body, param, query } from 'express-validator'
 
 // Validation schemas for assessment routes
 export const createAssessmentSchema = [
-  param('resident_id').isUUID().withMessage('Resident ID must be a valid UUID'),
+  param('resident_id').isString().withMessage('Resident ID must be a valid UUID'),
   body('assessment').isObject().withMessage('Assessment must be an object'),
   body('assessment.cognitive_status')
     .optional()
@@ -57,7 +57,7 @@ export const createAssessmentSchema = [
 ]
 
 export const updateAssessmentSchema = [
-  param('assessment_id').isUUID().withMessage('Assessment ID must be a valid UUID'),
+  param('assessment_id').isString().withMessage('Assessment ID must be a valid UUID'),
   body('assessment').isObject().withMessage('Assessment must be an object'),
   body('assessment.cognitive_status')
     .optional()
@@ -112,11 +112,11 @@ export const updateAssessmentSchema = [
 ]
 
 export const getAssessmentByIdSchema = [
-  param('assessment_id').isUUID().withMessage('Assessment ID must be a valid UUID')
+  param('assessment_id').isString().withMessage('Assessment ID must be a valid UUID')
 ]
 
 export const getAssessmentsByResidentSchema = [
-  param('resident_id').isUUID().withMessage('Resident ID must be a valid UUID'),
+  param('resident_id').isString().withMessage('Resident ID must be a valid UUID'),
   query('take').optional().isInt({ min: 1, max: 100 }).withMessage('Take must be an integer between 1 and 100'),
   query('skip').optional().isInt({ min: 0 }).withMessage('Skip must be a non-negative integer')
 ]
@@ -134,8 +134,8 @@ export const getAssessmentsHistorySchema = [
 export const getAssessmentsQuerySchema = [
   query('take').optional().isInt({ min: 1, max: 100 }).withMessage('Take must be an integer between 1 and 100'),
   query('skip').optional().isInt({ min: 0 }).withMessage('Skip must be a non-negative integer'),
-  query('resident_id').optional().isUUID().withMessage('Resident ID must be a valid UUID'),
-  query('assessed_by_id').optional().isUUID().withMessage('Assessed by ID must be a valid UUID'),
+  query('resident_id').optional().isString().withMessage('Resident ID must be a valid UUID'),
+  query('assessed_by_id').optional().isString().withMessage('Assessed by ID must be a valid UUID'),
   query('cognitive_status')
     .optional()
     .isIn(['all', 'NORMAL', 'IMPAIRED', 'SEVERE'])
@@ -153,5 +153,5 @@ export const getAssessmentsQuerySchema = [
 ]
 
 export const deleteAssessmentSchema = [
-  param('assessment_id').isUUID().withMessage('Assessment ID must be a valid UUID')
+  param('assessment_id').isString().withMessage('Assessment ID must be a valid UUID')
 ]

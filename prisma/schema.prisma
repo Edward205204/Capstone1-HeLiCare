@@ -174,6 +174,13 @@ enum TokenType {
 enum UserStatus {
   active
   inactive
+  pending
+}
+
+enum ResidentStatus {
+  active
+  inactive
+  discharged
 }
 
 enum InstitutionContractStatus {
@@ -274,6 +281,9 @@ model Institution {
   medicationCarePlans  MedicationCarePlanAssignment[]
   events               Event[]
   serviceContracts     ServiceContract[]
+  staffResidents       StaffResident[]
+  auditLogs            AuditLog[]
+  adminSetting         AdminSetting?
 }
 
 model User {
@@ -310,6 +320,8 @@ model User {
   familyNotificationReads FamilyNotificationRead[]
   paymentsMade            Payment[]
   paymentsVerified        Payment[]                @relation("PaymentVerifier")
+  staffResidentLinks      StaffResident[]          @relation("StaffResidentStaff")
+  auditLogs               AuditLog[]               @relation("AuditActor")
 }
 
 model StaffProfile {
@@ -360,6 +372,7 @@ model Resident {
   full_name      String
   gender         Gender
   date_of_birth  DateTime
+  status         ResidentStatus @default(active)
 
   // Body measurements (chỉ nhập một lần)
   height_cm Float?
@@ -389,6 +402,49 @@ model Resident {
   dietTags            ResidentDietTag[]
   feedbacks           Feedback[]
   serviceContract     ServiceContract?
+  staffResidentLinks  StaffResident[] @relation("ResidentStaffLinks")
+}
+
+model StaffResident {
+  staff_resident_id String   @id @default(uuid())
+  staff_id          String
+  resident_id       String
+  institution_id    String
+  role              String?
+  created_at        DateTime @default(now())
+
+  staff       User        @relation("StaffResidentStaff", fields: [staff_id], references: [user_id])
+  resident    Resident    @relation("ResidentStaffLinks", fields: [resident_id], references: [resident_id])
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+
+  @@unique([staff_id, resident_id])
+  @@index([institution_id])
+}
+
+model AuditLog {
+  audit_id       String   @id @default(uuid())
+  institution_id String
+  actor_id       String?
+  target_type    String
+  target_id      String?
+  action         String
+  metadata       Json?
+  created_at     DateTime @default(now())
+
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+  actor       User?       @relation("AuditActor", fields: [actor_id], references: [user_id])
+
+  @@index([institution_id, created_at])
+  @@index([target_type, target_id])
+}
+
+model AdminSetting {
+  institution_id String  @id
+  email_templates Json?
+  toggles         Json?
+  updated_at      DateTime @updatedAt
+
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
 }
 
 model HealthAssessment {
