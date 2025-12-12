@@ -216,8 +216,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'stale-vitals',
         severity: 'warning',
-        message: 'No fresh vitals captured in the last 12 hours.',
-        recommendation: 'Request staff to capture new vital signs.'
+        message: 'Không có dấu hiệu sinh tồn mới được ghi nhận trong 12 giờ qua.',
+        recommendation: 'Yêu cầu nhân viên đo lại các chỉ số sinh tồn.'
       })
     }
 
@@ -225,8 +225,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'hypertension-risk',
         severity: 'critical',
-        message: 'Blood pressure readings indicate instability.',
-        recommendation: 'Escalate to attending physician for evaluation.'
+        message: 'Chỉ số huyết áp cho thấy sự bất ổn.',
+        recommendation: 'Leo thang lên bác sĩ điều trị để đánh giá.'
       })
     }
 
@@ -234,8 +234,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'oxygen-drop',
         severity: 'critical',
-        message: 'Oxygen saturation below safe threshold.',
-        recommendation: 'Administer supplemental oxygen and re-check within 15 minutes.'
+        message: 'Độ bão hòa oxy dưới ngưỡng an toàn.',
+        recommendation: 'Thở oxy bổ sung và kiểm tra lại sau 15 phút.'
       })
     }
 
@@ -243,8 +243,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'infection-risk',
         severity: 'warning',
-        message: 'Temperature or heart rate show abnormal values.',
-        recommendation: 'Review antibiotics/antipyretics plan and monitor closely.'
+        message: 'Nhiệt độ hoặc nhịp tim hiển thị các giá trị bất thường.',
+        recommendation: 'Xem xét kế hoạch kháng sinh/hạ sốt và theo dõi chặt chẽ.'
       })
     }
 
@@ -252,8 +252,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'careplan-lag',
         severity: 'warning',
-        message: 'Care plan completion is below 60% in the last 72 hours.',
-        recommendation: 'Reassign staff or rebalance workload to close the gap.'
+        message: 'Tỷ lệ hoàn thành kế hoạch chăm sóc dưới 60% trong 72 giờ qua.',
+        recommendation: 'Phân công lại nhân viên hoặc cân bằng khối lượng công việc để thu hẹp khoảng cách.'
       })
     }
 
@@ -262,8 +262,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'hydration-gap',
         severity: 'info',
-        message: 'No meal / hydration logs captured recently.',
-        recommendation: 'Ensure hydration intake is recorded at least twice per shift.'
+        message: 'Không có nhật ký ăn uống / uống nước nào được ghi nhận gần đây.',
+        recommendation: 'Đảm bảo lượng nước uống được ghi lại ít nhất hai lần mỗi ca.'
       })
     }
 
@@ -271,8 +271,8 @@ export class HealthCalculationEngine {
       alerts.push({
         id: 'all-clear',
         severity: 'info',
-        message: 'All monitored indicators are within safe ranges.',
-        recommendation: 'Continue scheduled monitoring cadence.'
+        message: 'Tất cả các chỉ số theo dõi đều nằm trong phạm vi an toàn.',
+        recommendation: 'Tiếp tục nhịp độ theo dõi theo lịch trình.'
       })
     }
 
@@ -281,4 +281,3 @@ export class HealthCalculationEngine {
 }
 
 export const healthCalculationEngine = new HealthCalculationEngine()
-
