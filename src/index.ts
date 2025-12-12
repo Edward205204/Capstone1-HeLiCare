@@ -21,6 +21,8 @@ import notificationCenterRouter from './modules/notification-center/notification
 import menuPlannerRouter from './modules/menu-planner/menu-planner.route'
 import medicationCarePlanRouter from './modules/medication-careplan/medication-careplan.route'
 import eventRouter from './modules/event/event.route'
+import serviceContractRouter from './modules/service-contract/service-contract.route'
+import paymentRouter from './modules/payment/payment.route'
 const app = express()
 const httpServer = createServer(app)
 const PORT = env.PORT || 3000
@@ -50,6 +52,8 @@ app.use('/api/notifications', notificationCenterRouter)
 app.use('/api/menu-planner', menuPlannerRouter)
 app.use('/api/medication-careplan', medicationCarePlanRouter)
 app.use('/api/events', eventRouter)
+app.use('/api/service-contracts', serviceContractRouter)
+app.use('/api/payments', paymentRouter)
 app.use(defaultErrorHandler)
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`)

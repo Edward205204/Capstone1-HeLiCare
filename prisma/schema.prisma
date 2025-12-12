@@ -273,7 +273,7 @@ model Institution {
   medications          Medication[]
   medicationCarePlans  MedicationCarePlanAssignment[]
   events               Event[]
-  serviceContracts ServiceContract[]
+  serviceContracts     ServiceContract[]
 }
 
 model User {
@@ -286,29 +286,30 @@ model User {
   created_at     DateTime   @default(now())
   updated_at     DateTime   @updatedAt
 
-  institution         Institution?           @relation(fields: [institution_id], references: [institution_id])
-  familyProfile       FamilyProfile?
-  userTokens          UserToken[]
+  institution             Institution?             @relation(fields: [institution_id], references: [institution_id])
+  familyProfile           FamilyProfile?
+  userTokens              UserToken[]
   // residentApplication      ResidentApplication[]
-  assignedResidents   Resident[]             @relation("AssignedStaff")
-  resident            Resident?              @relation("ResidentUser")
-  staffProfile        StaffProfile?
-  familyResidentLinks FamilyResidentLink[]
-  familyVisits        Visit[]                @relation("FamilyVisits")
-  approvedVisits      Visit[]                @relation("VisitApprover")
-  healthAssessments   HealthAssessment[]     @relation("StaffAssessments")
-  staffSchedules      Schedule[]             @relation("StaffSchedules")
-  staffCareLogs       CareLog[]              @relation("StaffCareLogs")
-  posts               Post[]                 @relation("PostAuthor")
-  postLikes           PostLike[]             @relation("PostLikes")
-  comments            Comment[]              @relation("CommentAuthor")
-  healthCorrections   HealthDataCorrection[]
-  familyFeedbacks     Feedback[]             @relation("FamilyFeedback")
-  assignedFeedbacks   Feedback[]             @relation("AssignedFeedbackStaff")
-  createdMenus        WeeklyMenu[]           @relation("MenuCreator")
+  assignedResidents       Resident[]               @relation("AssignedStaff")
+  resident                Resident?                @relation("ResidentUser")
+  staffProfile            StaffProfile?
+  familyResidentLinks     FamilyResidentLink[]
+  familyVisits            Visit[]                  @relation("FamilyVisits")
+  approvedVisits          Visit[]                  @relation("VisitApprover")
+  healthAssessments       HealthAssessment[]       @relation("StaffAssessments")
+  staffSchedules          Schedule[]               @relation("StaffSchedules")
+  staffCareLogs           CareLog[]                @relation("StaffCareLogs")
+  posts                   Post[]                   @relation("PostAuthor")
+  postLikes               PostLike[]               @relation("PostLikes")
+  comments                Comment[]                @relation("CommentAuthor")
+  healthCorrections       HealthDataCorrection[]
+  familyFeedbacks         Feedback[]               @relation("FamilyFeedback")
+  assignedFeedbacks       Feedback[]               @relation("AssignedFeedbackStaff")
+  createdMenus            WeeklyMenu[]             @relation("MenuCreator")
   familyNotificationState FamilyNotificationState?
   familyNotificationReads FamilyNotificationRead[]
-  paymentsMade     Payment[]
+  paymentsMade            Payment[]
+  paymentsVerified        Payment[]                @relation("PaymentVerifier")
 }
 
 model StaffProfile {
@@ -387,7 +388,7 @@ model Resident {
   postResidents       PostResident[]       @relation("PostResidents")
   dietTags            ResidentDietTag[]
   feedbacks           Feedback[]
-  serviceContract  ServiceContract?
+  serviceContract     ServiceContract?
 }
 
 model HealthAssessment {
@@ -1092,18 +1093,18 @@ enum EventFrequency {
 }
 
 model Event {
-  event_id       String   @id @default(uuid())
-  institution_id String
-  name           String
-  type           EventType
-  status         EventStatus @default(Upcoming)
-  start_time     DateTime
-  end_time       DateTime
-  location       String // Default to institution name
-  room_ids       String[] // Optional for special events
+  event_id           String      @id @default(uuid())
+  institution_id     String
+  name               String
+  type               EventType
+  status             EventStatus @default(Upcoming)
+  start_time         DateTime
+  end_time           DateTime
+  location           String // Default to institution name
+  room_ids           String[] // Optional for special events
   care_configuration Json? // { subType, frequency } - only for Care events
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  created_at         DateTime    @default(now())
+  updated_at         DateTime    @updatedAt
 
   institution Institution @relation(fields: [institution_id], references: [institution_id])
 
@@ -1119,65 +1120,82 @@ enum BillingCycle {
 }
 
 enum PaymentMethod {
-  CASH        
-  TRANSFER    
+  CASH
+  TRANSFER
+  VNPAY // VNPay online payment gateway
 }
 
 enum PaymentStatus {
-  PENDING   
-  SUCCESS   
-  FAILED    
-  REFUNDED 
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
 }
 
 model ServiceContract {
-  contract_id    String       @id @default(uuid())
-  resident_id    String       @unique // Mỗi cụ chỉ có 1 hợp đồng active tại 1 thời điểm
+  contract_id    String @id @default(uuid())
+  resident_id    String @unique // Mỗi cụ chỉ có 1 hợp đồng active tại 1 thời điểm
   institution_id String
-  
-  billing_cycle  BillingCycle @default(MONTHLY) // Trả theo Tháng hay Năm
-  amount         Float        // Giá tiền của gói này
-  
-  start_date     DateTime     @default(now())
-  
+
+  billing_cycle BillingCycle @default(MONTHLY) // Trả theo Tháng hay Năm
+  amount        Float // Giá tiền của gói này
+
+  start_date DateTime @default(now())
+
   // Quan trọng: Ngày cần thanh toán tiếp theo. 
   // Ví dụ: Đã trả tháng 10, next_billing_date sẽ là 01/11.
   // Logic Frontend: Nếu today >= next_billing_date => Hiện nút "Thanh toán ngay"
-  next_billing_date DateTime 
-  
-  is_active      Boolean      @default(true)
-  created_at     DateTime     @default(now())
-  updated_at     DateTime     @updatedAt
+  next_billing_date DateTime
 
-  resident       Resident     @relation(fields: [resident_id], references: [resident_id])
-  institution    Institution  @relation(fields: [institution_id], references: [institution_id])
-  payments       Payment[]    // Lịch sử các lần gia hạn hợp đồng này
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  resident    Resident    @relation(fields: [resident_id], references: [resident_id])
+  institution Institution @relation(fields: [institution_id], references: [institution_id])
+  payments    Payment[] // Lịch sử các lần gia hạn hợp đồng này
 
   @@index([institution_id])
 }
 
 model Payment {
-  payment_id      String        @id @default(uuid())
-  contract_id     String       
-  payer_id        String?      
-  
-  amount          Float
-  payment_method  PaymentMethod @default(TRANSFER)
-  status          PaymentStatus @default(PENDING)
-  
+  payment_id  String  @id @default(uuid())
+  contract_id String
+  payer_id    String?
 
-  transaction_ref String?       
-  
+  amount         Float
+  payment_method PaymentMethod @default(TRANSFER)
+  status         PaymentStatus @default(PENDING)
 
-  period_start    DateTime     
-  period_end      DateTime     
-  
-  created_at      DateTime      @default(now())
-  updated_at      DateTime      @updatedAt
+  transaction_ref String? // Mã tham chiếu giao dịch (mã chuyển khoản hoặc mã VNPay)
 
-  contract        ServiceContract @relation(fields: [contract_id], references: [contract_id])
-  payer           User?           @relation(fields: [payer_id], references: [user_id])
+  // Cho chuyển khoản upload ảnh chứng từ
+  proof_image_url String? // URL ảnh chứng từ chuyển khoản
+
+  // Cho VNPay
+  vnpay_transaction_no String? // Mã giao dịch VNPay (vnp_TransactionNo)
+  vnpay_order_id       String? // Order ID gửi cho VNPay (vnp_TxnRef)
+  vnpay_response_code  String? // Mã phản hồi từ VNPay (vnp_ResponseCode)
+  vnpay_bank_code      String? // Mã ngân hàng thanh toán (vnp_BankCode)
+
+  // Metadata
+  notes          String? // Ghi chú thêm
+  verified_by_id String? // Admin xác nhận (cho manual verification)
+  verified_at    DateTime? // Thời gian xác nhận
+
+  period_start DateTime
+  period_end   DateTime
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  contract    ServiceContract @relation(fields: [contract_id], references: [contract_id])
+  payer       User?           @relation(fields: [payer_id], references: [user_id])
+  verified_by User?           @relation("PaymentVerifier", fields: [verified_by_id], references: [user_id])
 
   @@index([contract_id])
   @@index([transaction_ref])
+  @@index([vnpay_order_id])
+  @@index([status])
+  @@index([payer_id])
 }
