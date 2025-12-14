@@ -29,6 +29,14 @@ serviceContractRouter.get(
   wrapRequestHandler(serviceContractController.getServiceContracts)
 )
 
+// Lấy danh sách hợp đồng quá hạn (Admin/Staff)
+serviceContractRouter.get(
+  '/overdue',
+  accessTokenValidator,
+  isHandleByAdminOrStaff,
+  wrapRequestHandler(serviceContractController.getOverdueServiceContracts)
+)
+
 // Lấy hợp đồng của Family user
 serviceContractRouter.get(
   '/family',

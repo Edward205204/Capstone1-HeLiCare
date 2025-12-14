@@ -284,6 +284,9 @@ model Institution {
   staffResidents       StaffResident[]
   auditLogs            AuditLog[]
   adminSetting         AdminSetting?
+  roomChangeRequests   RoomChangeRequest[]
+  sosAlerts            SOSAlert[]
+  incidentReports      IncidentReport[]
 }
 
 model User {
@@ -296,32 +299,35 @@ model User {
   created_at     DateTime   @default(now())
   updated_at     DateTime   @updatedAt
 
-  institution             Institution?             @relation(fields: [institution_id], references: [institution_id])
-  familyProfile           FamilyProfile?
-  userTokens              UserToken[]
+  institution                Institution?             @relation(fields: [institution_id], references: [institution_id])
+  familyProfile              FamilyProfile?
+  userTokens                 UserToken[]
   // residentApplication      ResidentApplication[]
-  assignedResidents       Resident[]               @relation("AssignedStaff")
-  resident                Resident?                @relation("ResidentUser")
-  staffProfile            StaffProfile?
-  familyResidentLinks     FamilyResidentLink[]
-  familyVisits            Visit[]                  @relation("FamilyVisits")
-  approvedVisits          Visit[]                  @relation("VisitApprover")
-  healthAssessments       HealthAssessment[]       @relation("StaffAssessments")
-  staffSchedules          Schedule[]               @relation("StaffSchedules")
-  staffCareLogs           CareLog[]                @relation("StaffCareLogs")
-  posts                   Post[]                   @relation("PostAuthor")
-  postLikes               PostLike[]               @relation("PostLikes")
-  comments                Comment[]                @relation("CommentAuthor")
-  healthCorrections       HealthDataCorrection[]
-  familyFeedbacks         Feedback[]               @relation("FamilyFeedback")
-  assignedFeedbacks       Feedback[]               @relation("AssignedFeedbackStaff")
-  createdMenus            WeeklyMenu[]             @relation("MenuCreator")
-  familyNotificationState FamilyNotificationState?
-  familyNotificationReads FamilyNotificationRead[]
-  paymentsMade            Payment[]
-  paymentsVerified        Payment[]                @relation("PaymentVerifier")
-  staffResidentLinks      StaffResident[]          @relation("StaffResidentStaff")
-  auditLogs               AuditLog[]               @relation("AuditActor")
+  assignedResidents          Resident[]               @relation("AssignedStaff")
+  resident                   Resident?                @relation("ResidentUser")
+  staffProfile               StaffProfile?
+  familyResidentLinks        FamilyResidentLink[]
+  familyVisits               Visit[]                  @relation("FamilyVisits")
+  approvedVisits             Visit[]                  @relation("VisitApprover")
+  healthAssessments          HealthAssessment[]       @relation("StaffAssessments")
+  staffSchedules             Schedule[]               @relation("StaffSchedules")
+  staffCareLogs              CareLog[]                @relation("StaffCareLogs")
+  posts                      Post[]                   @relation("PostAuthor")
+  postLikes                  PostLike[]               @relation("PostLikes")
+  comments                   Comment[]                @relation("CommentAuthor")
+  healthCorrections          HealthDataCorrection[]
+  familyFeedbacks            Feedback[]               @relation("FamilyFeedback")
+  assignedFeedbacks          Feedback[]               @relation("AssignedFeedbackStaff")
+  createdMenus               WeeklyMenu[]             @relation("MenuCreator")
+  familyNotificationState    FamilyNotificationState?
+  familyNotificationReads    FamilyNotificationRead[]
+  paymentsMade               Payment[]
+  paymentsVerified           Payment[]                @relation("PaymentVerifier")
+  staffResidentLinks         StaffResident[]          @relation("StaffResidentStaff")
+  auditLogs                  AuditLog[]               @relation("AuditActor")
+  approvedRoomChangeRequests RoomChangeRequest[]      @relation("RoomChangeApprover")
+  resolvedAlerts             SOSAlert[]               @relation("ResolvedAlerts")
+  reportedIncidents          IncidentReport[]          @relation("ReportedIncidents")
 }
 
 model StaffProfile {
@@ -365,8 +371,8 @@ model UserToken {
 }
 
 model Resident {
-  resident_id    String   @id @default(uuid())
-  user_id        String?  @unique
+  resident_id    String         @id @default(uuid())
+  user_id        String?        @unique
   institution_id String?
   room_id        String?
   full_name      String
@@ -389,8 +395,9 @@ model Resident {
 
   user User? @relation("ResidentUser", fields: [user_id], references: [user_id])
 
-  institution Institution? @relation(fields: [institution_id], references: [institution_id])
-  room        Room?        @relation(fields: [room_id], references: [room_id])
+  institution        Institution?        @relation(fields: [institution_id], references: [institution_id])
+  room               Room?               @relation(fields: [room_id], references: [room_id])
+  roomChangeRequests RoomChangeRequest[]
 
   assigned_staff      User?                @relation("AssignedStaff", fields: [assigned_staff_id], references: [user_id])
   familyResidentLinks FamilyResidentLink[]
@@ -402,7 +409,9 @@ model Resident {
   dietTags            ResidentDietTag[]
   feedbacks           Feedback[]
   serviceContract     ServiceContract?
-  staffResidentLinks  StaffResident[] @relation("ResidentStaffLinks")
+  staffResidentLinks  StaffResident[]      @relation("ResidentStaffLinks")
+  sosAlerts           SOSAlert[]
+  incidentReports     IncidentReport[]
 }
 
 model StaffResident {
@@ -439,7 +448,7 @@ model AuditLog {
 }
 
 model AdminSetting {
-  institution_id String  @id
+  institution_id  String   @id
   email_templates Json?
   toggles         Json?
   updated_at      DateTime @updatedAt
@@ -515,8 +524,10 @@ model Room {
   current_occupancy Int
   notes             String?
 
-  institution Institution @relation(fields: [institution_id], references: [institution_id])
-  residents   Resident[]
+  institution                 Institution         @relation(fields: [institution_id], references: [institution_id])
+  residents                   Resident[]
+  currentRoomChangeRequests   RoomChangeRequest[] @relation("CurrentRoomRequests")
+  requestedRoomChangeRequests RoomChangeRequest[] @relation("RequestedRoomRequests")
 }
 
 model FamilyResidentLink {
@@ -905,6 +916,45 @@ model Feedback {
   @@index([category_id])
 }
 
+enum RoomChangeRequestStatus {
+  pending
+  approved
+  rejected
+  completed
+}
+
+model RoomChangeRequest {
+  request_id          String                  @id @default(uuid())
+  resident_id         String
+  institution_id      String
+  requested_by        String // user_id của người yêu cầu (family_user_id hoặc resident user_id)
+  requested_by_role   UserRole // Family hoặc Resident
+  current_room_id     String? // Phòng hiện tại
+  requested_room_id   String // Phòng muốn chuyển đến
+  requested_room_type RoomType // Loại phòng yêu cầu (single, double, multi)
+  status              RoomChangeRequestStatus @default(pending)
+  reason              String? // Lý do yêu cầu đổi phòng
+  approved_by         String? // user_id của staff/admin đã duyệt
+  approved_at         DateTime?
+  rejected_at         DateTime?
+  completed_at        DateTime? // Thời gian hoàn thành đổi phòng
+  notes               String? // Ghi chú từ staff
+  created_at          DateTime                @default(now())
+  updated_at          DateTime                @updatedAt
+
+  resident       Resident    @relation(fields: [resident_id], references: [resident_id])
+  institution    Institution @relation(fields: [institution_id], references: [institution_id])
+  current_room   Room?       @relation("CurrentRoomRequests", fields: [current_room_id], references: [room_id])
+  requested_room Room        @relation("RequestedRoomRequests", fields: [requested_room_id], references: [room_id])
+  approver       User?       @relation("RoomChangeApprover", fields: [approved_by], references: [user_id])
+
+  @@index([resident_id])
+  @@index([institution_id])
+  @@index([status])
+  @@index([requested_by])
+  @@index([created_at])
+}
+
 // Trạng thái thông báo của family user (mốc đã xem gần nhất)
 model FamilyNotificationState {
   user_id      String   @id
@@ -1254,4 +1304,93 @@ model Payment {
   @@index([vnpay_order_id])
   @@index([status])
   @@index([payer_id])
+}
+
+enum SOSAlertType {
+  fall
+  abnormal_vitals
+  emergency_button
+}
+
+enum SOSAlertStatus {
+  pending
+  acknowledged
+  in_progress
+  resolved
+  escalated
+}
+
+enum SOSAlertSeverity {
+  high
+  medium
+  low
+}
+
+model SOSAlert {
+  alert_id      String          @id @default(uuid())
+  resident_id   String
+  institution_id String
+  type          SOSAlertType
+  severity      SOSAlertSeverity
+  status        SOSAlertStatus  @default(pending)
+  
+  // Vital signs snapshot (for abnormal_vitals type)
+  vital_snapshot Json? // { bp_systolic, bp_diastolic, heart_rate, temperature, etc. }
+  
+  // Timer countdown (in seconds) - calculated from created_at
+  timer_seconds Int? // Default 60 seconds
+  
+  // Metadata
+  notes         String?
+  resolved_by_id String? // Staff who resolved
+  resolved_at    DateTime?
+  escalated_at   DateTime?
+  
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
+
+  resident      Resident        @relation(fields: [resident_id], references: [resident_id])
+  institution   Institution     @relation(fields: [institution_id], references: [institution_id])
+  resolved_by   User?           @relation("ResolvedAlerts", fields: [resolved_by_id], references: [user_id])
+
+  @@index([institution_id, status])
+  @@index([resident_id])
+  @@index([type])
+  @@index([created_at])
+  @@index([status, created_at])
+}
+
+enum IncidentType {
+  fall
+  health_event
+  behavioral
+  environmental_hazard
+}
+
+model IncidentReport {
+  report_id       String        @id @default(uuid())
+  resident_id     String
+  institution_id  String
+  reported_by_id  String // Staff who reported
+  
+  incident_type   IncidentType
+  root_cause      String?
+  actions_taken   String
+  outcome         String
+  occurred_at     DateTime // Combined date and time
+  
+  staff_on_duty   String? // Staff name (can be different from reported_by)
+  images          String[] // Array of image URLs
+  
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+
+  resident        Resident      @relation(fields: [resident_id], references: [resident_id])
+  institution     Institution   @relation(fields: [institution_id], references: [institution_id])
+  reported_by     User          @relation("ReportedIncidents", fields: [reported_by_id], references: [user_id])
+
+  @@index([institution_id, created_at])
+  @@index([resident_id])
+  @@index([incident_type])
+  @@index([occurred_at])
 }

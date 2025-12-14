@@ -21,3 +21,15 @@ export interface AddResidentToRoomReqBody {
 export interface RemoveResidentFromRoomReqBody {
   resident_id: string
 }
+
+export interface CreateRoomChangeRequestReqBody {
+  resident_id: string
+  requested_room_id: string
+  requested_room_type: RoomType
+  reason?: string
+}
+
+export interface ApproveRoomChangeRequestReqBody {
+  request_id: string
+  notes?: string
+}

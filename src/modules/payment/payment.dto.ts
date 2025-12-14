@@ -56,6 +56,10 @@ export interface PaymentResponse {
       resident_id: string
       full_name: string
     }
+    institution?: {
+      institution_id: string
+      name: string
+    }
   }
   payer?: {
     user_id: string

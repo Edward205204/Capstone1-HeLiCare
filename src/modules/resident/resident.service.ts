@@ -1,4 +1,12 @@
-import { Prisma, $Enums, ResidentAssessmentStatus, TokenType, UserRole, FamilyLinkStatus, UserStatus } from '@prisma/client'
+import {
+  Prisma,
+  $Enums,
+  ResidentAssessmentStatus,
+  TokenType,
+  UserRole,
+  FamilyLinkStatus,
+  UserStatus
+} from '@prisma/client'
 import { prisma } from '~/utils/db'
 import { AuthService, authService as authServiceInstance } from '../auth/auth.service'
 import { GetAppointmentQueryParams, GetResidentListParams, ResidentListResponse } from './resident.dto'
@@ -106,6 +114,9 @@ class ResidentService {
       where: { resident_id },
       include: {
         familyResidentLinks: {
+          where: {
+            status: FamilyLinkStatus.active // Chỉ hiển thị links đã active (đã xác thực)
+          },
           include: {
             family_user: {
               include: {
@@ -213,11 +224,11 @@ class ResidentService {
       family_user_id,
       status: FamilyLinkStatus.active
     }
-    
+
     if (resident_id) {
       whereClause.resident_id = resident_id
     }
-    
+
     const familyLink = await prisma.familyResidentLink.findFirst({
       where: whereClause,
       include: {
@@ -829,18 +840,18 @@ class ResidentService {
       // Get family user email
       const familyUser = await prisma.user.findUnique({
         where: { user_id: family_user_id },
-        select: { email: true }
+        select: { email: true, role: true, status: true }
       })
 
       if (familyUser) {
-        // Create FamilyResidentLink
+        // Create FamilyResidentLink with pending status (chưa xác thực)
         await prisma.familyResidentLink.create({
           data: {
             family_user_id,
             family_email: familyUser.email,
             resident_id: resident.resident_id,
             institution_id,
-            status: 'active'
+            status: 'pending' // Chưa xác thực, cần family click link trong email
           }
         })
 
@@ -849,17 +860,30 @@ class ResidentService {
           where: { user_id: family_user_id },
           data: { institution_id }
         })
+
+        // Gửi email xác thực liên kết đến family
+        await this.authService.sendTokenToUserEmail({
+          user_id: family_user_id,
+          token_type: TokenType.FamilyLinkToken as $Enums.TokenType,
+          role: familyUser.role as UserRole,
+          status: familyUser.status as UserStatus,
+          institution_id,
+          email_to: familyUser.email,
+          subject: `Vui lòng nhấn vào đường link bên dưới để xác thực liên kết với người thân`
+        })
       }
     }
 
     // Return resident with account info if created
     return {
       ...resident,
-      account: createdUser ? {
-        username: generatedUsername,
-        password: generatedPassword,
-        email: createdUser.email
-      } : null
+      account: createdUser
+        ? {
+            username: generatedUsername,
+            password: generatedPassword,
+            email: createdUser.email
+          }
+        : null
     }
   }
 
@@ -1334,13 +1358,7 @@ class ResidentService {
   }
 
   // Staff reset password for resident
-  resetResidentPassword = async ({
-    resident_id,
-    new_password
-  }: {
-    resident_id: string
-    new_password: string
-  }) => {
+  resetResidentPassword = async ({ resident_id, new_password }: { resident_id: string; new_password: string }) => {
     const resident = await prisma.resident.findUnique({
       where: { resident_id },
       include: {
@@ -1382,13 +1400,7 @@ class ResidentService {
   }
 
   // Staff change password for resident (set new password directly)
-  changeResidentPassword = async ({
-    resident_id,
-    new_password
-  }: {
-    resident_id: string
-    new_password: string
-  }) => {
+  changeResidentPassword = async ({ resident_id, new_password }: { resident_id: string; new_password: string }) => {
     const resident = await prisma.resident.findUnique({
       where: { resident_id },
       include: {

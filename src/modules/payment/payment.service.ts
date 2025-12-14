@@ -282,11 +282,33 @@ class PaymentService {
   }
 
   // Lấy payments của Family user
-  getPaymentsByFamily = async (family_user_id: string): Promise<PaymentResponse[]> => {
+  getPaymentsByFamily = async (family_user_id: string, params?: GetPaymentsQuery): Promise<PaymentResponse[]> => {
+    const { status, payment_method, start_date, end_date } = params || {}
+
+    const where: Prisma.PaymentWhereInput = {
+      payer_id: family_user_id
+    }
+
+    if (status) {
+      where.status = status
+    }
+
+    if (payment_method) {
+      where.payment_method = payment_method
+    }
+
+    if (start_date || end_date) {
+      where.created_at = {}
+      if (start_date) {
+        where.created_at.gte = new Date(start_date)
+      }
+      if (end_date) {
+        where.created_at.lte = new Date(end_date)
+      }
+    }
+
     const payments = await prisma.payment.findMany({
-      where: {
-        payer_id: family_user_id
-      },
+      where,
       include: {
         contract: {
           include: {
@@ -294,6 +316,12 @@ class PaymentService {
               select: {
                 resident_id: true,
                 full_name: true
+              }
+            },
+            institution: {
+              select: {
+                institution_id: true,
+                name: true
               }
             }
           }
@@ -551,6 +579,12 @@ class PaymentService {
               ? {
                   resident_id: payment.contract.resident.resident_id,
                   full_name: payment.contract.resident.full_name
+                }
+              : undefined,
+            institution: payment.contract.institution
+              ? {
+                  institution_id: payment.contract.institution.institution_id,
+                  name: payment.contract.institution.name
                 }
               : undefined
           }

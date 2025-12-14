@@ -289,6 +289,58 @@ class ServiceContractService {
     return contract ? this.formatServiceContractResponse(contract) : null
   }
 
+  // Lấy danh sách hợp đồng quá hạn (cho staff/admin)
+  getOverdueServiceContracts = async (institution_id: string): Promise<ServiceContractResponse[]> => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Set về đầu ngày để so sánh
+
+    const contracts = await prisma.serviceContract.findMany({
+      where: {
+        institution_id,
+        is_active: true,
+        next_billing_date: {
+          lt: today // next_billing_date < today
+        }
+      },
+      include: {
+        resident: {
+          include: {
+            room: {
+              select: {
+                room_id: true,
+                room_number: true
+              }
+            }
+          }
+        },
+        institution: {
+          select: {
+            institution_id: true,
+            name: true
+          }
+        },
+        payments: {
+          take: 10,
+          orderBy: {
+            created_at: 'desc' as const
+          },
+          select: {
+            payment_id: true,
+            amount: true,
+            status: true,
+            payment_method: true,
+            created_at: true
+          }
+        }
+      },
+      orderBy: {
+        next_billing_date: 'asc' // Sắp xếp theo ngày quá hạn gần nhất
+      }
+    })
+
+    return contracts.map(this.formatServiceContractResponse)
+  }
+
   // Lấy hợp đồng của Family user (qua resident links)
   getServiceContractsByFamily = async (family_user_id: string): Promise<ServiceContractResponse[]> => {
     // Lấy danh sách residents mà family user có quyền truy cập

@@ -174,6 +174,32 @@ class ServiceContractController {
     }
   }
 
+  // Lấy danh sách hợp đồng quá hạn (Admin/Staff)
+  getOverdueServiceContracts = async (req: Request, res: Response) => {
+    try {
+      const institution_id = req.decoded_authorization?.institution_id as string
+
+      if (!institution_id) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          message: 'Institution ID not found'
+        })
+        return
+      }
+
+      const contracts = await serviceContractService.getOverdueServiceContracts(institution_id)
+
+      res.status(HTTP_STATUS.OK).json({
+        message: 'Overdue service contracts retrieved successfully',
+        data: contracts
+      })
+    } catch (error: any) {
+      console.error('Error in getOverdueServiceContracts:', error)
+      res.status(error.status || HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        message: error.message || 'Failed to retrieve overdue service contracts'
+      })
+    }
+  }
+
   // Xóa/hủy hợp đồng (Admin/Staff)
   deleteServiceContract = async (req: Request, res: Response) => {
     try {

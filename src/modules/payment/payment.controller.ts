@@ -97,6 +97,7 @@ class PaymentController {
   getPaymentsByFamily = async (req: Request, res: Response) => {
     try {
       const family_user_id = req.decoded_authorization?.user_id as string
+      const query = req.query as unknown as GetPaymentsQuery
 
       if (!family_user_id) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -105,7 +106,7 @@ class PaymentController {
         return
       }
 
-      const payments = await paymentService.getPaymentsByFamily(family_user_id)
+      const payments = await paymentService.getPaymentsByFamily(family_user_id, query)
 
       res.status(HTTP_STATUS.OK).json({
         message: 'Payments retrieved successfully',
@@ -256,14 +257,14 @@ class PaymentController {
       const payment = await vnpayService.handleCallback(queryParams)
 
       // Redirect về frontend với kết quả
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001'
+      const frontendUrl = process.env.CLIENT_URL || 'http://localhost:3001'
       const success = payment.status === 'SUCCESS'
       const redirectUrl = `${frontendUrl}/payment/result?payment_id=${payment.payment_id}&status=${success ? 'success' : 'failed'}`
 
       res.redirect(redirectUrl)
     } catch (error: any) {
       console.error('Error in handleVNPayCallback:', error)
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001'
+      const frontendUrl = process.env.CLIENT_URL || 'http://localhost:3001'
       const redirectUrl = `${frontendUrl}/payment/result?error=${encodeURIComponent(error.message || 'Payment processing failed')}`
       res.redirect(redirectUrl)
     }

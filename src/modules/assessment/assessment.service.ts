@@ -8,6 +8,8 @@ import {
   GetAssessmentQueryParams
 } from './assessment.dto'
 import { TIME_STATUS } from '~/constants/time-status'
+import { correctionLogService } from '~/common/correction-log.service'
+import { CorrectionSourceType } from '@prisma/client'
 
 class AssessmentService {
   constructor() {}
@@ -484,6 +486,9 @@ class AssessmentService {
         where: { resident_id },
         include: {
           familyResidentLinks: {
+            where: {
+              status: 'active' // Chỉ lấy links đã active (đã xác thực)
+            },
             include: {
               family_user: {
                 select: {

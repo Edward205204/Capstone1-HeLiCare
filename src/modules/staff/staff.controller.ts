@@ -341,6 +341,141 @@ class StaffController {
       data: incidents
     })
   }
+
+  getSOSAlerts = async (req: Request, res: Response) => {
+    const institution_id = req.decoded_authorization?.institution_id as string
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const alerts = await this.staffService.getSOSAlerts(institution_id)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'SOS alerts fetched successfully',
+      data: alerts
+    })
+  }
+
+  updateAlertStatus = async (req: Request, res: Response) => {
+    const { alert_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const staff_id = req.decoded_authorization?.user_id as string
+    const { status, resolutionNotes } = req.body
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    if (!['acknowledged', 'in_progress', 'resolved', 'escalated'].includes(status)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        message: 'Invalid status'
+      })
+      return
+    }
+
+    const resolved_by_id = status === 'resolved' ? staff_id : undefined
+
+    const alert = await this.staffService.updateAlertStatus(
+      alert_id,
+      institution_id,
+      status,
+      resolved_by_id,
+      resolutionNotes
+    )
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Alert status updated successfully',
+      data: alert
+    })
+  }
+
+  getAbnormalVitals = async (req: Request, res: Response) => {
+    const { resident_id } = req.params
+    const institution_id = req.decoded_authorization?.institution_id as string
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const abnormalVitals = await this.staffService.getAbnormalVitals(resident_id, institution_id)
+
+    if (!abnormalVitals) {
+      res.status(HTTP_STATUS.OK).json({
+        message: 'No abnormal vital signs found',
+        data: null
+      })
+      return
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Abnormal vital signs fetched successfully',
+      data: abnormalVitals
+    })
+  }
+
+  createIncidentReport = async (req: Request, res: Response) => {
+    const staff_id = req.decoded_authorization?.user_id as string
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const { resident_id, incident_type, root_cause, actions_taken, outcome, occurred_at, staff_on_duty, images } =
+      req.body
+
+    if (!institution_id || !staff_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID or Staff ID not found in token'
+      })
+      return
+    }
+
+    if (!resident_id || !incident_type || !actions_taken || !outcome || !occurred_at) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        message: 'Missing required fields'
+      })
+      return
+    }
+
+    const report = await this.staffService.createIncidentReport(staff_id, institution_id, {
+      resident_id,
+      incident_type,
+      root_cause,
+      actions_taken,
+      outcome,
+      occurred_at: new Date(occurred_at),
+      staff_on_duty,
+      images
+    })
+
+    res.status(HTTP_STATUS.CREATED).json({
+      message: 'Incident report created successfully',
+      data: report
+    })
+  }
+
+  getIncidentReports = async (req: Request, res: Response) => {
+    const institution_id = req.decoded_authorization?.institution_id as string
+    const staff_id = req.decoded_authorization?.user_id as string
+
+    if (!institution_id) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        message: 'Institution ID not found in token'
+      })
+      return
+    }
+
+    const reports = await this.staffService.getIncidentReports(institution_id, staff_id)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Incident reports fetched successfully',
+      data: reports
+    })
+  }
 }
 
 export const staffController = new StaffController()

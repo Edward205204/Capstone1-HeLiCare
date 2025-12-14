@@ -140,10 +140,16 @@ class AuthService {
   }
 
   private async commonToken(payload: TokenPayload & { token_type: $Enums.TokenType }): Promise<string> {
+    // Sử dụng EXP_LINKING cho FamilyLinkToken, còn lại dùng COMMON_VERIFY_TOKEN_EXPIRATION_TIME
+    const expiresIn =
+      payload.token_type === TokenType.FamilyLinkToken
+        ? env.EXP_LINKING || '7d'
+        : env.COMMON_VERIFY_TOKEN_EXPIRATION_TIME
+
     return await signToken({
       secretOrPrivateKey: env.JWT_SECRET_KEY_COMMON_TOKEN as string,
       payload: { ...payload },
-      option: { expiresIn: env.COMMON_VERIFY_TOKEN_EXPIRATION_TIME }
+      option: { expiresIn }
     })
   }
 
@@ -450,15 +456,31 @@ class AuthService {
       throw new ErrorWithStatus({ message: 'Invalid family link token', status: HTTP_STATUS.BAD_REQUEST })
     }
     const family_user_id = decoded.user_id as string
+    const institution_id = decoded.institution_id as string | null
     const userToken = await prisma.userToken.findUnique({ where: { token_string: token_string } })
     if (!userToken) throw new ErrorWithStatus({ message: 'Family link token not found', status: HTTP_STATUS.NOT_FOUND })
 
     // Tìm resident từ institution_id trong token qua record pending gần nhất
+    // Nếu có institution_id trong token, filter theo đó để chính xác hơn
+    const whereClause: any = {
+      family_user_id,
+      status: FamilyLinkStatus.pending
+    }
+    if (institution_id) {
+      whereClause.institution_id = institution_id
+    }
+
     const pendingLink = await prisma.familyResidentLink.findFirst({
-      where: { family_user_id, status: FamilyLinkStatus.pending },
+      where: whereClause,
       orderBy: { created_at: 'desc' }
     })
-    if (!pendingLink) throw new Error('No pending link found')
+
+    if (!pendingLink) {
+      throw new ErrorWithStatus({
+        message: 'No pending link found. The link may have already been confirmed or expired.',
+        status: HTTP_STATUS.NOT_FOUND
+      })
+    }
 
     // Kích hoạt liên kết
     await prisma.familyResidentLink.update({

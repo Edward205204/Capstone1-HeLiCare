@@ -643,6 +643,379 @@ class StaffService {
       }
     })
   }
+
+  // Get SOS Alerts (from SOSAlert table and from abnormal vital signs)
+  getSOSAlerts = async (institution_id: string) => {
+    // Get alerts from SOSAlert table
+    const sosAlerts = await prisma.sOSAlert.findMany({
+      where: {
+        institution_id,
+        status: {
+          in: ['pending', 'acknowledged', 'in_progress']
+        }
+      },
+      include: {
+        resident: {
+          select: {
+            resident_id: true,
+            full_name: true,
+            room: {
+              select: {
+                room_number: true,
+                type: true
+              }
+            }
+          }
+        },
+        resolved_by: {
+          select: {
+            user_id: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    })
+
+    // Format alerts
+    const formattedAlerts = sosAlerts.map((alert: any) => {
+      const now = new Date()
+      const created = new Date(alert.created_at)
+      const elapsedSeconds = Math.floor((now.getTime() - created.getTime()) / 1000)
+      const timer = alert.timer_seconds ? Math.max(0, alert.timer_seconds - elapsedSeconds) : 60
+
+      // Auto-escalate if timer hits 0
+      let status = alert.status
+      if (status === 'pending' && timer <= 0) {
+        status = 'escalated'
+      }
+
+      const roomBed = alert.resident.room ? `Room ${alert.resident.room.room_number}` : 'N/A'
+
+      // Format vital snapshot
+      let vitalSnapshot: string | undefined
+      if (alert.type === 'abnormal_vitals' && alert.vital_snapshot) {
+        const vitals = alert.vital_snapshot as any
+        const parts: string[] = []
+        if (vitals.bp_systolic && vitals.bp_diastolic) {
+          parts.push(`BP: ${vitals.bp_systolic}/${vitals.bp_diastolic}`)
+        }
+        if (vitals.heart_rate) {
+          parts.push(`HR: ${vitals.heart_rate}`)
+        }
+        if (vitals.temperature) {
+          parts.push(`Temp: ${vitals.temperature}°C`)
+        }
+        if (vitals.oxygen_saturation) {
+          parts.push(`SpO2: ${vitals.oxygen_saturation}%`)
+        }
+        vitalSnapshot = parts.join(', ')
+      }
+
+      return {
+        id: alert.alert_id,
+        residentName: alert.resident.full_name,
+        residentId: alert.resident_id,
+        roomBed,
+        type: alert.type,
+        timestamp: alert.created_at.toISOString(),
+        vitalSnapshot,
+        severity: alert.severity,
+        status,
+        timer: Math.max(0, timer)
+      }
+    })
+
+    return formattedAlerts
+  }
+
+  // Update alert status
+  updateAlertStatus = async (
+    alert_id: string,
+    institution_id: string,
+    status: 'acknowledged' | 'in_progress' | 'resolved' | 'escalated',
+    resolved_by_id?: string,
+    resolutionNotes?: string
+  ) => {
+    const updateData: any = {
+      status,
+      updated_at: new Date()
+    }
+
+    if (status === 'resolved' && resolved_by_id) {
+      updateData.resolved_by_id = resolved_by_id
+      updateData.resolved_at = new Date()
+      if (resolutionNotes) {
+        updateData.notes = resolutionNotes
+      }
+    }
+
+    if (status === 'escalated') {
+      updateData.escalated_at = new Date()
+    }
+
+    const alert = await prisma.sOSAlert.update({
+      where: {
+        alert_id,
+        institution_id
+      },
+      data: updateData,
+      include: {
+        resident: {
+          select: {
+            resident_id: true,
+            full_name: true,
+            room: {
+              select: {
+                room_number: true,
+                type: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    return alert
+  }
+
+  // Get abnormal vital signs for a resident
+  getAbnormalVitals = async (resident_id: string, institution_id: string) => {
+    // First verify resident belongs to institution
+    const resident = await prisma.resident.findFirst({
+      where: {
+        resident_id,
+        institution_id
+      }
+    })
+
+    if (!resident) {
+      return null
+    }
+
+    // Get latest vital signs
+    const latestVitals = await prisma.healthAssessment.findFirst({
+      where: {
+        resident_id
+      },
+      orderBy: {
+        measured_at: 'desc'
+      }
+    })
+
+    if (!latestVitals) {
+      return null
+    }
+
+    // Check for abnormal values using same thresholds as frontend
+    const THRESH = {
+      systolic: { warnLow: 90, dangerLow: 80, warnHigh: 140, dangerHigh: 160 },
+      diastolic: { warnLow: 60, dangerLow: 50, warnHigh: 90, dangerHigh: 100 },
+      heartRate: { warnLow: 50, dangerLow: 40, warnHigh: 100, dangerHigh: 130 },
+      temperature: { warnLow: 35, dangerLow: 34, warnHigh: 37.5, dangerHigh: 39 },
+      respiration: { warnLow: 12, dangerLow: 8, warnHigh: 20, dangerHigh: 30 },
+      spo2: { warnLow: 95, dangerLow: 90 }
+    }
+
+    const abnormalities: Array<{ type: string; value: number; level: 'warning' | 'critical' }> = []
+
+    // Check systolic BP
+    if (latestVitals.blood_pressure_systolic) {
+      const val = latestVitals.blood_pressure_systolic
+      if (val <= THRESH.systolic.dangerLow || val >= THRESH.systolic.dangerHigh) {
+        abnormalities.push({ type: 'systolic', value: val, level: 'critical' })
+      } else if (val < THRESH.systolic.warnLow || val >= THRESH.systolic.warnHigh) {
+        abnormalities.push({ type: 'systolic', value: val, level: 'warning' })
+      }
+    }
+
+    // Check diastolic BP
+    if (latestVitals.blood_pressure_diastolic) {
+      const val = latestVitals.blood_pressure_diastolic
+      if (val <= THRESH.diastolic.dangerLow || val >= THRESH.diastolic.dangerHigh) {
+        abnormalities.push({ type: 'diastolic', value: val, level: 'critical' })
+      } else if (val < THRESH.diastolic.warnLow || val >= THRESH.diastolic.warnHigh) {
+        abnormalities.push({ type: 'diastolic', value: val, level: 'warning' })
+      }
+    }
+
+    // Check heart rate
+    if (latestVitals.heart_rate) {
+      const val = latestVitals.heart_rate
+      if (val <= THRESH.heartRate.dangerLow || val >= THRESH.heartRate.dangerHigh) {
+        abnormalities.push({ type: 'heart_rate', value: val, level: 'critical' })
+      } else if (val < THRESH.heartRate.warnLow || val >= THRESH.heartRate.warnHigh) {
+        abnormalities.push({ type: 'heart_rate', value: val, level: 'warning' })
+      }
+    }
+
+    // Check temperature
+    if (latestVitals.temperature_c) {
+      const val = latestVitals.temperature_c
+      if (val <= THRESH.temperature.dangerLow || val >= THRESH.temperature.dangerHigh) {
+        abnormalities.push({ type: 'temperature', value: val, level: 'critical' })
+      } else if (val < THRESH.temperature.warnLow || val >= THRESH.temperature.warnHigh) {
+        abnormalities.push({ type: 'temperature', value: val, level: 'warning' })
+      }
+    }
+
+    // Check respiratory rate
+    if (latestVitals.respiratory_rate) {
+      const val = latestVitals.respiratory_rate
+      if (val <= THRESH.respiration.dangerLow || val >= THRESH.respiration.dangerHigh) {
+        abnormalities.push({ type: 'respiration', value: val, level: 'critical' })
+      } else if (val < THRESH.respiration.warnLow || val >= THRESH.respiration.warnHigh) {
+        abnormalities.push({ type: 'respiration', value: val, level: 'warning' })
+      }
+    }
+
+    // Check SpO2
+    if (latestVitals.oxygen_saturation) {
+      const val = latestVitals.oxygen_saturation
+      if (val < THRESH.spo2.dangerLow) {
+        abnormalities.push({ type: 'spo2', value: val, level: 'critical' })
+      } else if (val < THRESH.spo2.warnLow) {
+        abnormalities.push({ type: 'spo2', value: val, level: 'warning' })
+      }
+    }
+
+    if (abnormalities.length === 0) {
+      return null
+    }
+
+    // Format vital snapshot string
+    const parts: string[] = []
+    if (latestVitals.blood_pressure_systolic && latestVitals.blood_pressure_diastolic) {
+      parts.push(`BP: ${latestVitals.blood_pressure_systolic}/${latestVitals.blood_pressure_diastolic}`)
+    }
+    if (latestVitals.heart_rate) {
+      parts.push(`HR: ${latestVitals.heart_rate}`)
+    }
+    if (latestVitals.temperature_c) {
+      parts.push(`Temp: ${latestVitals.temperature_c}°C`)
+    }
+    if (latestVitals.oxygen_saturation) {
+      parts.push(`SpO2: ${latestVitals.oxygen_saturation}%`)
+    }
+
+    const hasCritical = abnormalities.some((a) => a.level === 'critical')
+    const severity = hasCritical ? 'high' : 'medium'
+
+    return {
+      resident_id: resident_id,
+      measured_at: latestVitals.measured_at,
+      vital_snapshot: parts.join(', '),
+      abnormalities,
+      severity
+    }
+  }
+
+  // Create incident report
+  createIncidentReport = async (
+    staff_id: string,
+    institution_id: string,
+    data: {
+      resident_id: string
+      incident_type: 'fall' | 'health_event' | 'behavioral' | 'environmental_hazard'
+      root_cause?: string
+      actions_taken: string
+      outcome: string
+      occurred_at: Date
+      staff_on_duty?: string
+      images?: string[]
+    }
+  ) => {
+    const report = await prisma.incidentReport.create({
+      data: {
+        resident_id: data.resident_id,
+        institution_id,
+        reported_by_id: staff_id,
+        incident_type: data.incident_type,
+        root_cause: data.root_cause,
+        actions_taken: data.actions_taken,
+        outcome: data.outcome,
+        occurred_at: data.occurred_at,
+        staff_on_duty: data.staff_on_duty,
+        images: data.images || []
+      },
+      include: {
+        resident: {
+          select: {
+            resident_id: true,
+            full_name: true
+          }
+        },
+        reported_by: {
+          select: {
+            user_id: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    return report
+  }
+
+  // Get incident reports
+  getIncidentReports = async (institution_id: string, staff_id?: string) => {
+    const where: any = {
+      institution_id
+    }
+
+    if (staff_id) {
+      where.reported_by_id = staff_id
+    }
+
+    const reports = await prisma.incidentReport.findMany({
+      where,
+      include: {
+        resident: {
+          select: {
+            resident_id: true,
+            full_name: true
+          }
+        },
+        reported_by: {
+          select: {
+            user_id: true,
+            staffProfile: {
+              select: {
+                full_name: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        occurred_at: 'desc'
+      }
+    })
+
+    return reports.map((report: any) => ({
+      id: report.report_id,
+      residentId: report.resident_id,
+      residentName: report.resident.full_name,
+      incidentType: report.incident_type,
+      rootCause: report.root_cause || '',
+      actionsTaken: report.actions_taken,
+      outcome: report.outcome,
+      timeOccurred: report.occurred_at.toISOString().split('T')[1].substring(0, 5), // HH:MM
+      dateOccurred: report.occurred_at.toISOString().split('T')[0], // YYYY-MM-DD
+      staffOnDuty: report.staff_on_duty || report.reported_by.staffProfile?.full_name || '',
+      images: report.images
+    }))
+  }
 }
 
 const staffService = new StaffService()

@@ -178,4 +178,47 @@ staffRouter.post('/incident', accessTokenValidator, wrapRequestHandler(staffCont
  */
 staffRouter.get('/incidents', accessTokenValidator, wrapRequestHandler(staffController.getIncidents))
 
+/**
+ * @description Get SOS alerts
+ * @method GET
+ * @path /staff/incidents/alerts
+ */
+staffRouter.get('/incidents/alerts', accessTokenValidator, wrapRequestHandler(staffController.getSOSAlerts))
+
+/**
+ * @description Update alert status
+ * @method PATCH
+ * @path /staff/incidents/alerts/:alert_id/status
+ */
+staffRouter.patch(
+  '/incidents/alerts/:alert_id/status',
+  accessTokenValidator,
+  wrapRequestHandler(staffController.updateAlertStatus)
+)
+
+/**
+ * @description Get abnormal vital signs for a resident
+ * @method GET
+ * @path /staff/incidents/residents/:resident_id/abnormal-vitals
+ */
+staffRouter.get(
+  '/incidents/residents/:resident_id/abnormal-vitals',
+  accessTokenValidator,
+  wrapRequestHandler(staffController.getAbnormalVitals)
+)
+
+/**
+ * @description Create incident report
+ * @method POST
+ * @path /staff/incidents/reports
+ */
+staffRouter.post('/incidents/reports', accessTokenValidator, wrapRequestHandler(staffController.createIncidentReport))
+
+/**
+ * @description Get incident reports
+ * @method GET
+ * @path /staff/incidents/reports
+ */
+staffRouter.get('/incidents/reports', accessTokenValidator, wrapRequestHandler(staffController.getIncidentReports))
+
 export default staffRouter

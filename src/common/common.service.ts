@@ -12,7 +12,7 @@ class CommonService {
     // For residents, username is stored in email field (e.g., "johndoe@resident.local")
     // We need to find by email that matches the username pattern
     const emailPattern = `${username}@resident.local`
-    return prisma.user.findUnique({ 
+    return prisma.user.findUnique({
       where: { email: emailPattern },
       include: {
         resident: {
@@ -58,12 +58,11 @@ class CommonService {
   }
 
   getFamilyResidentLink = (family_user_id: string, resident_id: string): Promise<FamilyResidentLink | null> => {
-    return prisma.familyResidentLink.findUnique({
+    return prisma.familyResidentLink.findFirst({
       where: {
-        family_user_id_resident_id: {
-          family_user_id,
-          resident_id
-        }
+        family_user_id,
+        resident_id,
+        status: 'active' // Chỉ trả về link đã active (đã xác thực)
       }
     })
   }

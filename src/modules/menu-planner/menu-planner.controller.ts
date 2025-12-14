@@ -4,7 +4,6 @@ import { Request, Response } from 'express'
 import { DishTexture, MealSlot, FamilyLinkStatus } from '@prisma/client'
 import { menuExportService } from './menu-export.service'
 import { prisma } from '~/utils/db'
-import { FamilyLinkStatus } from '@prisma/client'
 import { servingsCalculationService } from './servings-calculation.service'
 
 class MenuPlannerController {
