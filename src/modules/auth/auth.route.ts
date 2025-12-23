@@ -124,7 +124,12 @@ authRouter.post('/reset-password', resetPasswordValidator, wrapRequestHandler(au
  * @body {current_password: string, new_password: string, confirm_password: string}
  * @response {message: string}
  */
-authRouter.post('/change-password', accessTokenValidator, changePasswordValidator, wrapRequestHandler(authController.changePassword))
+authRouter.post(
+  '/change-password',
+  accessTokenValidator,
+  changePasswordValidator,
+  wrapRequestHandler(authController.changePassword)
+)
 
 /**
  * @description Renew invite token for all member of institution
@@ -181,6 +186,10 @@ authRouter.get('/check-user-by-email', checkUserByEmailValidator, wrapRequestHan
  * @body {email: string, full_name: string}
  * @response {message: string, data: {user_id: string, email: string}}
  */
-authRouter.post('/create-family-account', createFamilyAccountValidator, wrapRequestHandler(authController.createFamilyAccount))
+authRouter.post(
+  '/create-family-account',
+  createFamilyAccountValidator,
+  wrapRequestHandler(authController.createFamilyAccount)
+)
 
 export default authRouter

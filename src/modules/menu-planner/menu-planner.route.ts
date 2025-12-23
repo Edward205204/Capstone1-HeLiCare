@@ -181,7 +181,7 @@ menuPlannerRouter.get(
   wrapRequestHandler(menuPlannerController.getWeeklyMenuByWeek)
 )
 
-// ========== DISH SUGGESTIONS ==========
+//  DISH SUGGESTIONS
 menuPlannerRouter.get(
   '/dish-suggestions/:resident_id',
   accessTokenValidator,

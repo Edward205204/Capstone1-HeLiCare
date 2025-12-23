@@ -142,4 +142,3 @@ export class HealthInsightService {
 }
 
 export const healthInsightService = new HealthInsightService()
-

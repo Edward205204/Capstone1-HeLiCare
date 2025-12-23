@@ -73,4 +73,3 @@ class CorrectionLogService {
 const correctionLogService = new CorrectionLogService()
 
 export { correctionLogService, CorrectionLogService }
-

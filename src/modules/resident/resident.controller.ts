@@ -196,7 +196,7 @@ class ResidentController {
   // Get resident dashboard data (for resident users)
   getResidentDashboardData = async (req: Request, res: Response) => {
     const user_id = req.decoded_authorization?.user_id as string
-    
+
     if (!user_id) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         message: 'User ID not found in token',

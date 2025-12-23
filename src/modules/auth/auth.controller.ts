@@ -29,7 +29,7 @@ class AuthController {
 
   residentLogin = async (req: Request, res: Response) => {
     const user = req.user as User & { resident?: { resident_id: string; institution_id: string } }
-    
+
     // Get resident_id from the user's resident relation
     const resident = await prisma.resident.findUnique({
       where: { user_id: user.user_id },

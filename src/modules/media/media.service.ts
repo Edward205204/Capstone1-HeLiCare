@@ -70,15 +70,15 @@ class MediaService {
         const newPath = path.resolve(UPLOAD_IMAGES_DIR, `${newName}.jpg`)
         await sharp(file.filepath).jpeg().toFile(newPath)
         fs.unlinkSync(file.filepath)
-        
+
         // Lấy host từ request hoặc từ env
         const protocol = req.protocol || 'http'
         const host = req.get('host') || `localhost:${process.env.PORT || 3000}`
         const baseUrl = `${protocol}://${host}`
         const imageUrl = `${baseUrl}/api/media/static/images/${newName}.jpg`
-        
+
         console.log('Uploaded image URL:', imageUrl, 'File saved to:', newPath)
-        
+
         return {
           url: imageUrl,
           type: MediaType.image

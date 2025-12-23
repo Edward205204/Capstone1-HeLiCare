@@ -285,7 +285,7 @@ class AuthService {
     // Tạo password tạm thời ngẫu nhiên (sẽ yêu cầu đặt password mới khi verify email)
     const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12) + 'A1!'
     const { password } = await hashPassword(tempPassword)
-    
+
     const user = await prisma.user.create({
       data: {
         email: data.email,

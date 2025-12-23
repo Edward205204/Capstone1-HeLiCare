@@ -196,12 +196,7 @@ class VisitController {
       return
     }
 
-    const visits = await visitService.getVisitsByResident(
-      resident_id,
-      status as any,
-      Number(limit),
-      Number(offset)
-    )
+    const visits = await visitService.getVisitsByResident(resident_id, status as any, Number(limit), Number(offset))
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Get visits successfully',

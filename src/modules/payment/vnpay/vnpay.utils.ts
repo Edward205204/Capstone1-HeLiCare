@@ -61,9 +61,9 @@ export const createVNPaySecureHash = (params: Record<string, any>): string => {
   const hmac = crypto.createHmac('sha512', VNPAY_CONFIG.hashSecret)
   hmac.update(queryString, 'utf-8')
   const hash = hmac.digest('hex')
-  
+
   console.log('VNPay Calculated Hash:', hash)
-  
+
   return hash
 }
 
@@ -122,7 +122,9 @@ export const createVNPayPaymentUrl = (
 
   // Validate Hash Secret format (thường là 32 ký tự)
   if (VNPAY_CONFIG.hashSecret.length !== 32) {
-    console.warn(`⚠️  WARNING: VNPay Hash Secret should be 32 characters, got ${VNPAY_CONFIG.hashSecret.length} characters`)
+    console.warn(
+      `⚠️  WARNING: VNPay Hash Secret should be 32 characters, got ${VNPAY_CONFIG.hashSecret.length} characters`
+    )
   }
 
   if (!amount || amount <= 0) {
@@ -166,7 +168,9 @@ export const createVNPayPaymentUrl = (
   // Kiểm tra returnUrl - VNPay sandbox có thể không chấp nhận localhost
   const finalReturnUrl = returnUrl || VNPAY_CONFIG.returnUrl
   if (finalReturnUrl.includes('localhost') || finalReturnUrl.includes('127.0.0.1')) {
-    console.warn('⚠️  WARNING: VNPay sandbox may not accept localhost in returnUrl. Consider using ngrok or a public URL.')
+    console.warn(
+      '⚠️  WARNING: VNPay sandbox may not accept localhost in returnUrl. Consider using ngrok or a public URL.'
+    )
   }
 
   const params: Record<string, string> = {
