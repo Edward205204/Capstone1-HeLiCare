@@ -282,8 +282,11 @@ class AuthService {
   }
 
   createFamilyAccount = async (data: { email: string; full_name: string }) => {
-    // Tạo password tạm thời ngẫu nhiên (sẽ yêu cầu đặt password mới khi verify email)
-    const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12) + 'A1!'
+    // Tạo password tạm thời ngẫu nhiên (sẽ yêu cầu đặt password mới qua link reset password trong email)
+    const tempPassword =
+      Math.random().toString(36).slice(-12) +
+      Math.random().toString(36).slice(-12) +
+      'A1!'
     const { password } = await hashPassword(tempPassword)
 
     const user = await prisma.user.create({
@@ -302,14 +305,16 @@ class AuthService {
       }
     })
 
+    // Thay vì gửi EmailVerifyToken, ta gửi luôn ForgotPasswordToken
+    // để người dùng đặt mật khẩu mới ngay sau khi nhấn vào link trong email.
     await this.sendTokenToUserEmail({
       user_id: user.user_id,
-      token_type: TokenType.EmailVerifyToken,
+      token_type: TokenType.ForgotPasswordToken,
       role: UserRole.Family,
       status: UserStatus.inactive,
       institution_id: null,
       email_to: user.email,
-      subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
+      subject: `Vui lòng nhấn vào đường link bên dưới và đặt lại mật khẩu để kích hoạt tài khoản gia đình của bạn`
     })
 
     return { user_id: user.user_id, email: user.email }
@@ -360,7 +365,12 @@ class AuthService {
     const { password: hashedPassword } = await hashPassword(password)
     await prisma.user.update({
       where: { user_id },
-      data: { password: hashedPassword }
+      data: {
+        password: hashedPassword,
+        // Bất kể là flow quên mật khẩu hay tạo tài khoản mới,
+        // sau khi đặt mật khẩu xong thì đảm bảo user đang ở trạng thái active.
+        status: UserStatus.active
+      }
     })
     await prisma.userToken.deleteMany({
       where: { user_id, token_type: { in: [TokenType.RefreshToken, TokenType.ForgotPasswordToken] } }

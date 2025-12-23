@@ -97,35 +97,35 @@ export class HealthCalculationEngine {
     const indicators: HealthIndicator[] = [
       {
         id: 'cardio-stability',
-        label: 'Cardio Stability',
+        label: 'Ổn định huyết động',
         value: Math.round(bpScore * 100),
         unit: '%',
         severity: this.severityFromScore(bpScore),
-        description: 'Weighted score from systolic/diastolic trends.'
+        description: 'Điểm tổng hợp từ xu hướng huyết áp tâm thu/tâm trương.'
       },
       {
         id: 'oxygenation',
-        label: 'Oxygenation',
+        label: 'Tình trạng oxy hóa',
         value: Math.round(spo2Score * 100),
         unit: '%',
         severity: this.severityFromScore(spo2Score),
-        description: 'Based on latest SpO₂ values.'
+        description: 'Dựa trên các giá trị SpO₂ gần nhất.'
       },
       {
         id: 'thermoregulation',
-        label: 'Thermoregulation',
+        label: 'Điều hòa thân nhiệt',
         value: Math.round(tempScore * 100),
         unit: '%',
         severity: this.severityFromScore(tempScore),
-        description: 'Body temperature stability.'
+        description: 'Mức độ ổn định nhiệt độ cơ thể.'
       },
       {
         id: 'activity-adherence',
-        label: 'Care Plan Adherence',
+        label: 'Tuân thủ kế hoạch chăm sóc',
         value: Math.round(adherenceScore * 100),
         unit: '%',
         severity: this.severityFromScore(adherenceScore),
-        description: 'Completed care logs vs. total in last 72h.'
+        description: 'Số nhật ký chăm sóc đã hoàn thành so với tổng số trong 72 giờ gần nhất.'
       }
     ]
 
