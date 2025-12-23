@@ -33,3 +33,21 @@ export interface ApproveRoomChangeRequestReqBody {
   request_id: string
   notes?: string
 }
+
+export interface GetRoomsListParams {
+  institution_id: string
+  page?: number
+  limit?: number
+}
+
+export interface RoomListPagination {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+export interface RoomListResponse {
+  rooms: unknown[]
+  pagination?: RoomListPagination
+}

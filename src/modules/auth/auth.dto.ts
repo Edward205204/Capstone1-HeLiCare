@@ -49,3 +49,8 @@ export interface RegisterDto {
   confirm_password: string
   role: UserRole
 }
+
+export interface CreateFamilyAccountDto {
+  email: string
+  full_name: string
+}

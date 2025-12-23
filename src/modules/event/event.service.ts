@@ -126,7 +126,19 @@ export class EventService {
     // Only calculate status if we're checking existing events
     const now = new Date()
     const startTime = new Date(data.start_time)
-    const initialStatus = startTime > now ? EventStatus.Upcoming : this.calculateStatus(data.start_time, data.end_time, EventStatus.Upcoming)
+    const initialStatus =
+      startTime > now
+        ? EventStatus.Upcoming
+        : this.calculateStatus(data.start_time, data.end_time, EventStatus.Upcoming)
+
+    const roomIdsToSave = data.room_ids || []
+    console.log(`[createEvent] Creating event "${data.name}"`)
+    console.log(`[createEvent] room_ids from request:`, data.room_ids)
+    console.log(
+      `[createEvent] room_ids to save:`,
+      roomIdsToSave,
+      `(type: ${typeof roomIdsToSave}, isArray: ${Array.isArray(roomIdsToSave)}, length: ${Array.isArray(roomIdsToSave) ? roomIdsToSave.length : 'N/A'})`
+    )
 
     // Create the main event
     const event = await prisma.event.create({
@@ -137,7 +149,7 @@ export class EventService {
         start_time: data.start_time,
         end_time: data.end_time,
         location,
-        room_ids: data.room_ids || [],
+        room_ids: roomIdsToSave,
         care_configuration: data.care_configuration
           ? (data.care_configuration as unknown as Prisma.JsonObject)
           : undefined,
@@ -171,40 +183,92 @@ export class EventService {
   ): Promise<{ data: EventResponse[]; total: number }> {
     const { take = 100, skip = 0, start_date, end_date } = params
 
-    const where: Prisma.EventWhereInput = {
-      institution_id,
-      room_ids: {
-        has: room_id
-      }
+    // Build base where condition
+    const baseWhere: Prisma.EventWhereInput = {
+      institution_id
     }
 
+    // Add date filters
     if (start_date || end_date) {
-      where.start_time = {}
+      baseWhere.start_time = {}
       if (start_date) {
-        where.start_time.gte = new Date(start_date)
+        baseWhere.start_time.gte = new Date(start_date)
       }
       if (end_date) {
-        where.start_time.lte = new Date(end_date)
+        baseWhere.start_time.lte = new Date(end_date)
       }
     }
 
-    const [data, total] = await Promise.all([
-      prisma.event.findMany({
-        where,
-        take,
-        skip,
-        orderBy: { start_time: 'asc' },
-        include: {
-          institution: {
-            select: {
-              institution_id: true,
-              name: true
-            }
+    // Query all events first, then filter in memory
+    // This is necessary because Prisma doesn't support equals: [] for arrays
+    const allEvents = await prisma.event.findMany({
+      where: baseWhere,
+      take: 1000, // Increase limit to get all events
+      orderBy: { start_time: 'asc' },
+      include: {
+        institution: {
+          select: {
+            institution_id: true,
+            name: true
           }
         }
-      }),
-      prisma.event.count({ where })
-    ])
+      }
+    })
+
+    console.log(`[getEventsByRoom] Found ${allEvents.length} total events for institution ${institution_id}`)
+    console.log(`[getEventsByRoom] Looking for room_id: ${room_id}`)
+    allEvents.forEach((event, idx) => {
+      console.log(
+        `[getEventsByRoom] Event ${idx + 1}: ${event.name}, room_ids:`,
+        event.room_ids,
+        `(type: ${typeof event.room_ids}, isArray: ${Array.isArray(event.room_ids)}, length: ${Array.isArray(event.room_ids) ? event.room_ids.length : 'N/A'})`
+      )
+    })
+
+    // Filter events that apply to this room:
+    // 1. Events with empty room_ids array (apply to all rooms)
+    // 2. Events with room_ids containing this room_id
+    const filteredEvents = allEvents.filter((event) => {
+      // Ensure room_ids is an array
+      let roomIds = event.room_ids
+      if (!roomIds) {
+        roomIds = []
+      }
+      // Handle case where room_ids might be stored as JSON string
+      if (typeof roomIds === 'string') {
+        try {
+          roomIds = JSON.parse(roomIds)
+        } catch {
+          roomIds = []
+        }
+      }
+      // Ensure it's an array
+      if (!Array.isArray(roomIds)) {
+        roomIds = []
+      }
+
+      // Empty array means apply to all rooms
+      if (roomIds.length === 0) {
+        console.log(`[getEventsByRoom] Event "${event.name}" applies to all rooms (empty room_ids)`)
+        return true
+      }
+      // Check if room_id is in the array
+      const includes = roomIds.includes(room_id)
+      if (includes) {
+        console.log(`[getEventsByRoom] Event "${event.name}" applies to room ${room_id}`)
+      } else {
+        console.log(
+          `[getEventsByRoom] Event "${event.name}" does NOT apply to room ${room_id} (room_ids: ${JSON.stringify(roomIds)})`
+        )
+      }
+      return includes
+    })
+
+    console.log(`[getEventsByRoom] Filtered to ${filteredEvents.length} events for room ${room_id}`)
+
+    // Apply pagination
+    const data = filteredEvents.slice(skip, skip + take)
+    const total = filteredEvents.length
 
     // Auto-update status for all fetched events
     const eventsToUpdate: { id: string; newStatus: EventStatus }[] = []
@@ -226,26 +290,38 @@ export class EventService {
           })
         )
       )
+
+      // Update status in data array
+      const updatedEventIds = eventsToUpdate.map(({ id }) => id)
+      const updatedEventsMap = new Map(
+        (
+          await prisma.event.findMany({
+            where: {
+              event_id: { in: updatedEventIds }
+            },
+            include: {
+              institution: {
+                select: {
+                  institution_id: true,
+                  name: true
+                }
+              }
+            }
+          })
+        ).map((e) => [e.event_id, e])
+      )
+
+      // Update data with new statuses
+      data.forEach((event, index) => {
+        const updated = updatedEventsMap.get(event.event_id)
+        if (updated) {
+          data[index] = updated
+        }
+      })
     }
 
-    // Re-fetch with updated statuses
-    const updatedData = await prisma.event.findMany({
-      where,
-      take,
-      skip,
-      orderBy: { start_time: 'asc' },
-      include: {
-        institution: {
-          select: {
-            institution_id: true,
-            name: true
-          }
-        }
-      }
-    })
-
     return {
-      data: updatedData.map((e) => this.mapToEventResponse(e)),
+      data: data.map((e) => this.mapToEventResponse(e)),
       total
     }
   }

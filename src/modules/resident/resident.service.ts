@@ -861,6 +861,15 @@ class ResidentService {
           data: { institution_id }
         })
 
+        // Tạo tài khoản mock cho family user (nếu chưa có)
+        const { dbmAccountService } = await import('../payment/dbm-account.service')
+        try {
+          await dbmAccountService.createAccountForUser(family_user_id)
+        } catch (error) {
+          console.error('Error creating mock account for family user:', error)
+          // Không throw error để không ảnh hưởng đến việc tạo resident
+        }
+
         // Gửi email xác thực liên kết đến family
         await this.authService.sendTokenToUserEmail({
           user_id: family_user_id,
@@ -871,6 +880,17 @@ class ResidentService {
           email_to: familyUser.email,
           subject: `Vui lòng nhấn vào đường link bên dưới để xác thực liên kết với người thân`
         })
+      }
+    }
+
+    // Tạo tài khoản mock cho resident user (nếu có)
+    if (createdUser) {
+      const { dbmAccountService } = await import('../payment/dbm-account.service')
+      try {
+        await dbmAccountService.createAccountForUser(createdUser.user_id)
+      } catch (error) {
+        console.error('Error creating mock account for resident user:', error)
+        // Không throw error để không ảnh hưởng đến việc tạo resident
       }
     }
 

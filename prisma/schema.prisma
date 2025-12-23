@@ -287,6 +287,7 @@ model Institution {
   roomChangeRequests   RoomChangeRequest[]
   sosAlerts            SOSAlert[]
   incidentReports      IncidentReport[]
+  dbmPaymentLogs       DBM_PaymentLog[]              @relation("DBM_PaymentLog")
 }
 
 model User {
@@ -328,6 +329,8 @@ model User {
   approvedRoomChangeRequests RoomChangeRequest[]      @relation("RoomChangeApprover")
   resolvedAlerts             SOSAlert[]               @relation("ResolvedAlerts")
   reportedIncidents          IncidentReport[]          @relation("ReportedIncidents")
+  dbmUserAccount             DBM_UserAccount?          @relation("DBM_UserAccount")
+  dbmPaymentLogs             DBM_PaymentLog[]          @relation("DBM_PaymentLog")
 }
 
 model StaffProfile {
@@ -1298,6 +1301,10 @@ model Payment {
   contract    ServiceContract @relation(fields: [contract_id], references: [contract_id])
   payer       User?           @relation(fields: [payer_id], references: [user_id])
   verified_by User?           @relation("PaymentVerifier", fields: [verified_by_id], references: [user_id])
+  
+  // Mock database relations
+  dbmTransactionHistory DBM_TransactionHistory? @relation("DBM_TransactionHistory")
+  dbmPaymentLog          DBM_PaymentLog?        @relation("DBM_PaymentLog")
 
   @@index([contract_id])
   @@index([transaction_ref])
@@ -1393,4 +1400,118 @@ model IncidentReport {
   @@index([resident_id])
   @@index([incident_type])
   @@index([occurred_at])
+}
+
+// ========== MOCK DATABASE TABLES (DBM) - For VNPay Mock Payment System ==========
+// Các table này dùng để mock hệ thống thanh toán VNPay với tài khoản ngân hàng ảo
+// Mỗi user sẽ có 100 triệu VND trong tài khoản mặc định
+
+// Tài khoản ngân hàng mock của user (Family/Resident)
+model DBM_UserAccount {
+  account_id     String   @id @default(uuid())
+  user_id        String   @unique // Link với User table
+  account_number String   @unique @default(uuid()) // Số tài khoản ảo
+  balance        Float    @default(100000000) // Số dư mặc định: 100 triệu VND
+  currency       String   @default("VND")
+  status         String   @default("active") // active, frozen, closed
+  bank_name      String   @default("NCB") // Ngân hàng mock
+  
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  
+  user           User     @relation("DBM_UserAccount", fields: [user_id], references: [user_id])
+  transactions   DBM_TransactionHistory[]
+  paymentLogs    DBM_PaymentLog[] @relation("DBM_PaymentLog")
+  
+  @@index([user_id])
+  @@index([account_number])
+  @@index([status])
+}
+
+// Lịch sử giao dịch mock (tất cả các giao dịch trừ/cộng tiền)
+model DBM_TransactionHistory {
+  transaction_id   String   @id @default(uuid())
+  account_id       String
+  payment_id       String?  @unique // Link với Payment table nếu có
+  
+  transaction_type String  // debit (trừ tiền), credit (cộng tiền), refund (hoàn tiền)
+  amount           Float    // Số tiền giao dịch
+  balance_before   Float    // Số dư trước giao dịch
+  balance_after    Float    // Số dư sau giao dịch
+  
+  description      String   // Mô tả giao dịch
+  reference_code   String?  // Mã tham chiếu (vnpay_order_id, transaction_ref, etc.)
+  
+  status           String   @default("completed") // completed, failed, pending, cancelled
+  
+  created_at       DateTime @default(now())
+  
+  account          DBM_UserAccount @relation(fields: [account_id], references: [account_id])
+  payment          Payment?        @relation("DBM_TransactionHistory", fields: [payment_id], references: [payment_id])
+  paymentLog       DBM_PaymentLog? @relation("DBM_PaymentLog")
+  
+  @@index([account_id])
+  @@index([payment_id])
+  @@index([transaction_type])
+  @@index([status])
+  @@index([created_at])
+  @@index([reference_code])
+}
+
+// Log thanh toán của viện (để làm dashboard và báo cáo)
+model DBM_PaymentLog {
+  log_id          String   @id @default(uuid())
+  institution_id  String
+  payment_id      String   @unique
+  
+  // Thông tin thanh toán
+  amount          Float
+  payment_method  String   // VNPAY, TRANSFER, etc.
+  status          String   // SUCCESS, FAILED, PENDING, REFUNDED
+  
+  // Thông tin người thanh toán
+  payer_id        String?  // User ID của người thanh toán
+  payer_type      String?  // family, resident
+  payer_name      String?  // Tên người thanh toán
+  
+  // Thông tin cư dân
+  resident_id     String?
+  resident_name   String?
+  
+  // Thông tin hợp đồng
+  contract_id     String?
+  
+  // Thông tin giao dịch VNPay
+  vnpay_order_id       String?
+  vnpay_transaction_no String?
+  vnpay_response_code  String?
+  vnpay_bank_code      String?
+  
+  // Thông tin tài khoản mock
+  account_id           String?  // Link với DBM_UserAccount
+  transaction_id       String?  @unique // Link với DBM_TransactionHistory
+  
+  // Metadata
+  period_start    DateTime?
+  period_end      DateTime?
+  notes           String?
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  
+  institution     Institution @relation("DBM_PaymentLog", fields: [institution_id], references: [institution_id])
+  payment         Payment     @relation("DBM_PaymentLog", fields: [payment_id], references: [payment_id])
+  payer           User?       @relation("DBM_PaymentLog", fields: [payer_id], references: [user_id])
+  account         DBM_UserAccount? @relation("DBM_PaymentLog", fields: [account_id], references: [account_id])
+  transaction     DBM_TransactionHistory? @relation("DBM_PaymentLog", fields: [transaction_id], references: [transaction_id])
+  
+  @@index([institution_id])
+  @@index([payment_id])
+  @@index([payer_id])
+  @@index([resident_id])
+  @@index([contract_id])
+  @@index([status])
+  @@index([payment_method])
+  @@index([created_at])
+  @@index([vnpay_order_id])
 }

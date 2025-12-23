@@ -15,7 +15,8 @@ import {
   resendEmailVerifyValidator,
   checkUserByEmailValidator,
   changePasswordValidator,
-  residentLoginValidator
+  residentLoginValidator,
+  createFamilyAccountValidator
 } from './auth.middleware'
 import { authController } from './auth.controller'
 
@@ -172,5 +173,14 @@ authRouter.post('/family-link/resend', accessTokenValidator, wrapRequestHandler(
  * @response {message: string, data: {user_id: string, email: string, role: string, status: string, family_name: string, family_phone: string}}
  */
 authRouter.get('/check-user-by-email', checkUserByEmailValidator, wrapRequestHandler(authController.checkUserByEmail))
+
+/**
+ * @description Create family account (without password, will be set when verify email)
+ * @method POST
+ * @path /auth/create-family-account
+ * @body {email: string, full_name: string}
+ * @response {message: string, data: {user_id: string, email: string}}
+ */
+authRouter.post('/create-family-account', createFamilyAccountValidator, wrapRequestHandler(authController.createFamilyAccount))
 
 export default authRouter

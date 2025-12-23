@@ -40,11 +40,18 @@ class RoomController {
       return
     }
 
-    const rooms = await roomService.getRoomsByInstitution(institution_id)
+    const page = req.query.page ? Number(req.query.page) : undefined
+    const limit = req.query.limit ? Number(req.query.limit) : undefined
+
+    const result = await roomService.getRoomsByInstitution({
+      institution_id,
+      page,
+      limit
+    })
 
     res.status(HTTP_STATUS.OK).json({
       message: 'Get rooms successfully',
-      data: rooms
+      data: result
     })
   }
 

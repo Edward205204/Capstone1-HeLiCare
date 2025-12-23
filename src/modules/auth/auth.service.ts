@@ -281,6 +281,40 @@ class AuthService {
     })
   }
 
+  createFamilyAccount = async (data: { email: string; full_name: string }) => {
+    // Tạo password tạm thời ngẫu nhiên (sẽ yêu cầu đặt password mới khi verify email)
+    const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12) + 'A1!'
+    const { password } = await hashPassword(tempPassword)
+    
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        password,
+        role: UserRole.Family,
+        status: UserStatus.inactive
+      }
+    })
+
+    await prisma.familyProfile.create({
+      data: {
+        user_id: user.user_id,
+        full_name: data.full_name
+      }
+    })
+
+    await this.sendTokenToUserEmail({
+      user_id: user.user_id,
+      token_type: TokenType.EmailVerifyToken,
+      role: UserRole.Family,
+      status: UserStatus.inactive,
+      institution_id: null,
+      email_to: user.email,
+      subject: `Xác thực email của bạn để hoàn tất quá trình đăng ký tài khoản`
+    })
+
+    return { user_id: user.user_id, email: user.email }
+  }
+
   resendEmailVerify = async (email: string) => {
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) {
@@ -410,6 +444,100 @@ class AuthService {
         exp: exp
       }
     })
+
+    // Nếu là Family user, tự động liên kết với resident có email này (nếu có)
+    if (user.role === UserRole.Family) {
+      // Tìm FamilyResidentLink có family_user_id = user_id hiện tại và status = pending
+      // (link đã được tạo khi tạo resident với user chưa active)
+      const pendingLinks = await prisma.familyResidentLink.findMany({
+        where: {
+          family_user_id: user.user_id,
+          status: FamilyLinkStatus.pending
+        },
+        include: {
+          resident: {
+            select: {
+              resident_id: true,
+              institution_id: true
+            }
+          }
+        }
+      })
+
+      // Tự động active các link pending (vì user đã verify email)
+      for (const link of pendingLinks) {
+        await prisma.familyResidentLink.update({
+          where: { link_id: link.link_id },
+          data: { status: FamilyLinkStatus.active }
+        })
+
+        // Cập nhật institution_id của user nếu chưa có
+        if (!user.institution_id && link.institution_id) {
+          await prisma.user.update({
+            where: { user_id: user.user_id },
+            data: { institution_id: link.institution_id }
+          })
+        }
+      }
+
+      // Tìm FamilyResidentLink có family_email = email của user và status = pending
+      // và family_user_id khác với user_id hiện tại (trường hợp link được tạo với email nhưng user_id khác)
+      const pendingLinksByEmail = await prisma.familyResidentLink.findMany({
+        where: {
+          family_email: user.email,
+          status: FamilyLinkStatus.pending,
+          NOT: {
+            family_user_id: user.user_id
+          }
+        },
+        include: {
+          resident: {
+            select: {
+              resident_id: true,
+              institution_id: true
+            }
+          }
+        }
+      })
+
+      // Cập nhật family_user_id cho các link pending
+      for (const link of pendingLinksByEmail) {
+        // Kiểm tra xem đã có link với user_id này chưa
+        const existingLink = await prisma.familyResidentLink.findUnique({
+          where: {
+            family_user_id_resident_id: {
+              family_user_id: user.user_id,
+              resident_id: link.resident_id
+            }
+          }
+        })
+
+        if (!existingLink) {
+          // Xóa link cũ và tạo link mới với user_id đúng
+          await prisma.familyResidentLink.delete({
+            where: { link_id: link.link_id }
+          })
+
+          await prisma.familyResidentLink.create({
+            data: {
+              family_user_id: user.user_id,
+              family_email: user.email,
+              resident_id: link.resident_id,
+              institution_id: link.institution_id,
+              status: FamilyLinkStatus.active // Tự động active vì user đã verify email
+            }
+          })
+
+          // Cập nhật institution_id của user nếu chưa có
+          if (!user.institution_id && link.institution_id) {
+            await prisma.user.update({
+              where: { user_id: user.user_id },
+              data: { institution_id: link.institution_id }
+            })
+          }
+        }
+      }
+    }
 
     return {
       access_token,

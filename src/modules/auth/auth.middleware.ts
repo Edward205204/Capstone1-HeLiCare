@@ -163,6 +163,30 @@ export const registerValidator = validate(
   )
 )
 
+export const createFamilyAccountValidator = validate(
+  checkSchema(
+    {
+      email: {
+        ...emailSchema,
+        custom: {
+          options: async (value) => {
+            const user = await commonService.checkEmailExist(value)
+            if (user) {
+              throw new ErrorWithStatus({
+                message: 'Email already exists',
+                status: HTTP_STATUS.UNPROCESSABLE_ENTITY
+              })
+            }
+            return true
+          }
+        }
+      },
+      full_name: fullNameSchema
+    },
+    ['body']
+  )
+)
+
 export const accessTokenValidator = validate(
   checkSchema(
     {

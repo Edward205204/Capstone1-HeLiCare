@@ -5,7 +5,6 @@ import { HTTP_STATUS } from '~/constants/http_status'
 import { prisma } from '~/utils/db'
 import {
   CreatePaymentReqBody,
-  UpdatePaymentReqBody,
   UploadProofReqBody,
   GetPaymentsQuery,
   CreateVNPayPaymentReqBody,
@@ -222,7 +221,7 @@ class PaymentController {
 
   // ========== VNPAY ENDPOINTS ==========
 
-  // Tạo VNPay payment URL
+  // Tạo VNPay payment URL (hoặc mock payment nếu ở mock mode)
   createVNPayPayment = async (req: Request, res: Response) => {
     try {
       const payer_id = req.decoded_authorization?.user_id as string
@@ -235,6 +234,27 @@ class PaymentController {
         return
       }
 
+      const queryMock = req.query.mock
+      const useMock = queryMock === 'true' || queryMock === 'true'
+
+      if (useMock) {
+        const result = await vnpayService.mockPayment(payer_id, data)
+
+        res.status(HTTP_STATUS.OK).json({
+          message: result.status === 'SUCCESS' ? 'Thanh toán thành công' : result.message,
+          data: {
+            payment_id: result.payment_id,
+            status: result.status,
+            vnpay_order_id: result.vnpay_order_id,
+            vnpay_transaction_no: result.vnpay_transaction_no
+          }
+        })
+        return
+      }
+
+      console.log('⚠️ Using REAL VNPay mode - Will redirect to VNPay sandbox')
+
+      // Nếu không phải mock mode, tạo VNPay URL như bình thường
       const result = await vnpayService.createPaymentUrl(payer_id, data)
 
       res.status(HTTP_STATUS.OK).json({
@@ -252,6 +272,7 @@ class PaymentController {
   // VNPay callback handler
   handleVNPayCallback = async (req: Request, res: Response) => {
     try {
+      console.log('VNPay Callback - Query params:', JSON.stringify(req.query, null, 2))
       const queryParams = req.query as unknown as VNPayCallbackQuery
 
       const payment = await vnpayService.handleCallback(queryParams)
@@ -259,13 +280,28 @@ class PaymentController {
       // Redirect về frontend với kết quả
       const frontendUrl = process.env.CLIENT_URL || 'http://localhost:3001'
       const success = payment.status === 'SUCCESS'
-      const redirectUrl = `${frontendUrl}/payment/result?payment_id=${payment.payment_id}&status=${success ? 'success' : 'failed'}`
 
-      res.redirect(redirectUrl)
+      console.log(`Payment ${payment.payment_id} processed. Status: ${payment.status}, Success: ${success}`)
+
+      if (success) {
+        const redirectUrl = `${frontendUrl}/payment/result?payment_id=${payment.payment_id}&status=success`
+        console.log(`Redirecting to success URL: ${redirectUrl}`)
+        res.redirect(redirectUrl)
+      } else {
+        // Nếu thất bại, lấy thông báo lỗi từ VNPay response code
+        const errorMessage = payment.vnpay_response_code
+          ? vnpayService.getResponseMessage(payment.vnpay_response_code)
+          : 'Thanh toán thất bại'
+        const redirectUrl = `${frontendUrl}/payment/result?payment_id=${payment.payment_id}&status=failed&error=${encodeURIComponent(errorMessage)}`
+        console.log(`Redirecting to failed URL: ${redirectUrl}`)
+        res.redirect(redirectUrl)
+      }
     } catch (error: any) {
       console.error('Error in handleVNPayCallback:', error)
+      console.error('Error stack:', error.stack)
       const frontendUrl = process.env.CLIENT_URL || 'http://localhost:3001'
       const redirectUrl = `${frontendUrl}/payment/result?error=${encodeURIComponent(error.message || 'Payment processing failed')}`
+      console.log(`Redirecting to error URL: ${redirectUrl}`)
       res.redirect(redirectUrl)
     }
   }
@@ -273,9 +309,10 @@ class PaymentController {
   // VNPay IPN handler
   handleVNPayIPN = async (req: Request, res: Response) => {
     try {
+      console.log('VNPay IPN received:', JSON.stringify(req.query, null, 2))
       const queryParams = req.query as unknown as VNPayCallbackQuery
 
-      const payment = await vnpayService.handleIPN(queryParams)
+      await vnpayService.handleIPN(queryParams)
 
       // VNPay yêu cầu trả về response code
       res.status(HTTP_STATUS.OK).json({

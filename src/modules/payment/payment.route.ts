@@ -1,10 +1,10 @@
 import { Router } from 'express'
 import { paymentController } from './payment.controller'
+import { dbmAccountController } from './dbm-account.controller'
 import {
   isHandleByAdminOrStaff,
   isHandleByFamily,
   createPaymentValidator,
-  updatePaymentValidator,
   uploadProofValidator,
   paymentIdParamValidator,
   createVNPayPaymentValidator
@@ -88,5 +88,41 @@ paymentRouter.get('/vnpay/callback', wrapRequestHandler(paymentController.handle
 
 // VNPay IPN (public - không cần auth vì VNPay gọi trực tiếp)
 paymentRouter.post('/vnpay/ipn', wrapRequestHandler(paymentController.handleVNPayIPN))
+
+// ========== MOCK ACCOUNT ENDPOINTS (DBM) ==========
+
+// Lấy thông tin tài khoản của user hiện tại (Family/Resident)
+paymentRouter.get('/dbm/account', accessTokenValidator, wrapRequestHandler(dbmAccountController.getMyAccount))
+
+// Lấy lịch sử giao dịch của user hiện tại (Family/Resident)
+paymentRouter.get(
+  '/dbm/transactions',
+  accessTokenValidator,
+  wrapRequestHandler(dbmAccountController.getMyTransactionHistory)
+)
+
+// Lấy thống kê thanh toán cho viện (Admin/Staff)
+paymentRouter.get(
+  '/dbm/statistics',
+  accessTokenValidator,
+  isHandleByAdminOrStaff,
+  wrapRequestHandler(dbmAccountController.getPaymentStatistics)
+)
+
+// Lấy revenue analytics theo thời gian (để làm chart)
+paymentRouter.get(
+  '/dbm/revenue/analytics',
+  accessTokenValidator,
+  isHandleByAdminOrStaff,
+  wrapRequestHandler(dbmAccountController.getRevenueAnalytics)
+)
+
+// Lấy revenue theo phương thức thanh toán
+paymentRouter.get(
+  '/dbm/revenue/by-method',
+  accessTokenValidator,
+  isHandleByAdminOrStaff,
+  wrapRequestHandler(dbmAccountController.getRevenueByPaymentMethod)
+)
 
 export default paymentRouter

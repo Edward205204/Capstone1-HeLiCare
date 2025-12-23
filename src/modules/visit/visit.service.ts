@@ -703,6 +703,7 @@ class VisitService {
 
   private async getOrCreateDailyStats(institution_id: string, date: string) {
     const visitDate = new Date(date)
+    visitDate.setHours(0, 0, 0, 0) // Normalize to start of day for consistency
     let stats = await prisma.visitDailyStats.findUnique({
       where: {
         institution_id_visit_date: {
@@ -775,6 +776,7 @@ class VisitService {
 
   private async decreaseDailyStats(institution_id: string, visit_date: Date) {
     const visitDate = new Date(visit_date)
+    visitDate.setHours(0, 0, 0, 0) // Normalize to start of day for consistency
     const stats = await prisma.visitDailyStats.findUnique({
       where: {
         institution_id_visit_date: {
@@ -1079,6 +1081,7 @@ class VisitService {
   // Transaction version of updateDailyStats
   private async updateDailyStatsInTransaction(tx: any, institution_id: string, date: string, slot_id: string) {
     const visitDate = new Date(date)
+    visitDate.setHours(0, 0, 0, 0) // Normalize to start of day for consistency
     const stats = await this.getOrCreateDailyStatsInTransaction(tx, institution_id, date)
 
     const visitorsBySlot = { ...((stats.visitors_by_slot as Record<string, number>) || {}) }
@@ -1101,6 +1104,7 @@ class VisitService {
   // Transaction version of getOrCreateDailyStats
   private async getOrCreateDailyStatsInTransaction(tx: any, institution_id: string, date: string) {
     const visitDate = new Date(date)
+    visitDate.setHours(0, 0, 0, 0) // Normalize to start of day for consistency
     let stats = await tx.visitDailyStats.findUnique({
       where: {
         institution_id_visit_date: {

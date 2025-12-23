@@ -40,24 +40,78 @@ class RoomService {
   }
 
   // Lấy danh sách phòng của institution
-  getRoomsByInstitution = async (institution_id: string) => {
-    const rooms = await prisma.room.findMany({
-      where: { institution_id },
-      include: {
-        residents: {
-          select: {
-            resident_id: true,
-            full_name: true,
-            gender: true,
-            date_of_birth: true,
-            admission_date: true
-          }
+  getRoomsByInstitution = async (params: { institution_id: string; page?: number; limit?: number }) => {
+    const { institution_id, page, limit } = params
+
+    const where = { institution_id }
+
+    const include = {
+      residents: {
+        select: {
+          resident_id: true,
+          full_name: true,
+          gender: true,
+          date_of_birth: true,
+          admission_date: true
         }
-      },
-      orderBy: {
-        room_number: 'asc'
       }
-    })
+    }
+
+    const orderBy = {
+      room_number: 'asc' as const
+    }
+
+    // Nếu không có pagination, trả về tất cả rooms
+    if (!page || !limit) {
+      const rooms = await prisma.room.findMany({
+        where,
+        include,
+        orderBy
+      })
+
+      // Tính lại current_occupancy từ số lượng residents thực tế và cập nhật vào database
+      const updatedRooms = await Promise.all(
+        rooms.map(async (room) => {
+          const actualOccupancy = room.residents.length
+          const isAvailable = actualOccupancy < room.capacity
+
+          // Chỉ cập nhật nếu khác với giá trị hiện tại
+          if (room.current_occupancy !== actualOccupancy || room.is_available !== isAvailable) {
+            const updatedRoom = await prisma.room.update({
+              where: { room_id: room.room_id },
+              data: {
+                current_occupancy: actualOccupancy,
+                is_available: isAvailable
+              },
+              include
+            })
+            return updatedRoom
+          }
+
+          return room
+        })
+      )
+
+      return {
+        rooms: updatedRooms
+      }
+    }
+
+    // Có pagination
+    const safeLimit = Math.min(Math.max(limit, 1), 100)
+    const safePage = Math.max(page, 1)
+    const skip = (safePage - 1) * safeLimit
+
+    const [total, rooms] = await prisma.$transaction([
+      prisma.room.count({ where }),
+      prisma.room.findMany({
+        where,
+        include,
+        orderBy,
+        skip,
+        take: safeLimit
+      })
+    ])
 
     // Tính lại current_occupancy từ số lượng residents thực tế và cập nhật vào database
     const updatedRooms = await Promise.all(
@@ -73,17 +127,7 @@ class RoomService {
               current_occupancy: actualOccupancy,
               is_available: isAvailable
             },
-            include: {
-              residents: {
-                select: {
-                  resident_id: true,
-                  full_name: true,
-                  gender: true,
-                  date_of_birth: true,
-                  admission_date: true
-                }
-              }
-            }
+            include
           })
           return updatedRoom
         }
@@ -92,7 +136,15 @@ class RoomService {
       })
     )
 
-    return updatedRooms
+    return {
+      rooms: updatedRooms,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / safeLimit))
+      }
+    }
   }
 
   // Lấy thông tin phòng theo ID

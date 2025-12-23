@@ -3,7 +3,7 @@ import { Request, Response } from 'express'
 import { HTTP_STATUS } from '~/constants/http_status'
 import { AuthService, authService as authServiceInstance } from './auth.service'
 import { User, UserStatus } from '@prisma/client'
-import { EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
+import { CreateFamilyAccountDto, EmailVerifyTokenReqBody, RegisterDto } from './auth.dto'
 import { prisma } from '~/utils/db'
 
 class AuthController {
@@ -192,6 +192,14 @@ class AuthController {
     const data = await this.authService.checkUserByEmail(email as string)
     res.status(HTTP_STATUS.OK).json({
       message: 'User found',
+      data
+    })
+  }
+
+  createFamilyAccount = async (req: Request, res: Response) => {
+    const data = await this.authService.createFamilyAccount(req.body as CreateFamilyAccountDto)
+    res.status(HTTP_STATUS.OK).json({
+      message: 'Tài khoản gia đình đã được tạo thành công. Vui lòng kiểm tra email để kích hoạt tài khoản.',
       data
     })
   }
